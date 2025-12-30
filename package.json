@@ -1,6 +1,24 @@
 {
   "name": "kalivra",
   "version": "1.0.0",
+  "build":{
+    "appId": "com.Bawky.kalivra",
+    "directories":{
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron ."

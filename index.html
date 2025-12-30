@@ -2,66 +2,167 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Dynamic Balance Tool</title>
+    <title>Balance Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="sidebar" id="leftSidebar">
-        <h2>Global Settings</h2>
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-            <label style="margin:0; width: 80px;">Max Level:</label>
-            <input type="number" id="maxLevel" value="20">
+    <div class="custom-title-bar">
+        <div class="title-drag-area">
+            <span class="app-title">Kalivra</span>
+        </div>
+        <div class="window-controls">
+            <button id="minBtn" class="win-btn" title="Minimize">─</button>
+            <button id="maxBtn" class="win-btn" title="Maximize">◻</button>
+            <button id="closeBtn" class="win-btn close-btn" title="Close">✕</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <div class="sidebar" id="leftSidebar">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Global Settings</h2>
+                <button id="configBtn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">Config</button>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <label style="margin:0; width: 80px;">Max Level:</label>
+                <input type="number" id="maxLevel" value="20">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Entities</h2>
+                <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e;">+ Add</button>
+            </div>
+            
+            <div id="entityContainer"></div>
+
+            <div style="margin-top: auto; border-top: 1px solid #3e3e42; padding-top: 15px;">
+                <button class="btn" id="calcBtn">Run Simulation</button>
+                <button class="btn" id="exportBtn" style="background-color: #d29922;">Export CSV</button>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                    <button class="btn" id="saveBtn" style="background-color: #2da44e;">Save</button>
+                    <button class="btn" id="loadBtn" style="background-color: #6a737d;">Load</button>
+                </div>
+            </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>Entities</h2>
-            <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e;">+ Add</button>
-        </div>
-        
-        <div id="entityContainer"></div>
+        <div class="resizer" id="resizerLeft"></div>
 
-        <div style="margin-top: auto; border-top: 1px solid #3e3e42; padding-top: 15px;">
-            <button class="btn" id="calcBtn">Run Simulation</button>
-            <button class="btn" id="exportBtn" style="background-color: #d29922;">Export CSV</button>
-            <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <button class="btn" id="saveBtn" style="background-color: #2da44e;">Save</button>
-                <button class="btn" id="loadBtn" style="background-color: #6a737d;">Load</button>
+        <div class="main-content" id="mainContent">
+            <div class="chart-header">
+                <h3>Simulation Result</h3>
+                <select id="graphMetric">
+                    <option value="cp" selected>Combat Power</option>
+                    <option value="dmg">Avg Damage</option>
+                </select>
+            </div>
+            
+            <div class="chart-container" id="chartPanel">
+                <canvas id="balanceChart"></canvas>
+            </div>
+            
+            <div class="resizer-vertical" id="resizerVertical"></div>
+            
+            <div class="analysis-panel" id="analysisPanel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="margin:0; border:none;">Balance Analysis</h3>
+                    <button id="openBattleBtn" class="btn" style="width:auto; padding:4px 12px; font-size:0.8em; background-color:#d29922;">Battle Sim</button>
+                </div>
+                <div id="analysisLog" class="log-container">
+                    <div class="log-item placeholder">Run simulation to see analysis...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="resizer" id="resizerRight"></div>
+
+        <div class="sidebar right-sidebar" id="rightSidebar">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Item / Buffs</h2>
+                <button id="addItemBtn" style="padding: 4px 10px; background-color:#d29922; border:none; border-radius:4px; color:white; cursor:pointer;">+ New</button>
+            </div>
+
+            <div id="itemContainer"></div>
+            
+            <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #3e3e42; color: #888; font-size: 0.8em;">
+                * Items apply to checked entities.
             </div>
         </div>
     </div>
 
-    <div class="resizer" id="resizerLeft"></div>
-
-    <div class="main-content" id="mainContent">
-        <h3>Simulation Result</h3>
-        
-        <div class="chart-container" id="chartPanel">
-            <canvas id="balanceChart"></canvas>
-        </div>
-        
-        <div class="resizer-vertical" id="resizerVertical"></div>
-        
-        <div class="analysis-panel" id="analysisPanel">
-            <h3>Balance Analysis</h3>
-            <div id="analysisLog" class="log-container">
-                <div class="log-item placeholder">Run simulation to see analysis...</div>
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3>Game Rules & Formulas</h3>
+                <span class="close-modal">&times;</span>
             </div>
+            
+            <div class="config-section">
+                <label>Main Damage Formula</label>
+                <input type="text" id="dmgFormula" class="formula-input">
+            </div>
+    
+            <div class="config-section">
+                <label>Combat Power (CP) Formula</label>
+                <input type="text" id="cpFormula" class="formula-input">
+            </div>
+            
+            <div class="config-section">
+                <label>Define Stats</label>
+                <input type="text" id="statDefinitions">
+                <p style="font-size:0.8em; color:#888;">* 'eva' is used for dodge chance (0-100%).</p>
+            </div>
+    
+            <button class="btn" id="applyConfigBtn">Apply Rules</button>
         </div>
     </div>
 
-    <div class="resizer" id="resizerRight"></div>
+    <div id="battleModal" class="modal">
+        <div class="modal-content battle-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3>Battle Simulator</h3>
+                <span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span>
+            </div>
+            
+            <div class="battle-controls">
+                <div class="battle-control-group" style="flex:1;">
+                    <label style="color:#007acc;">Attacker</label>
+                    <select id="battleEntA" class="dark-select"></select>
+                </div>
+                <div style="align-self:end; padding-bottom:10px; font-weight:bold; color:#888;">VS</div>
+                <div class="battle-control-group" style="flex:1;">
+                    <label style="color:#ff5555;">Opponent</label>
+                    <select id="battleEntB" class="dark-select">
+                        <option value="all">ALL (League)</option>
+                    </select>
+                </div>
+                <div class="battle-control-group" style="width:80px;">
+                    <label>Level</label>
+                    <input type="number" id="battleLevel" value="20">
+                </div>
+                <div class="battle-control-group" style="width:80px;">
+                    <label>Count</label>
+                    <input type="number" id="battleCount" value="100">
+                </div>
+                <button id="runBattleBtn" class="btn" style="width:auto; height:36px; background-color:#e74c3c;">FIGHT</button>
+            </div>
 
-    <div class="sidebar right-sidebar" id="rightSidebar">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2>Item / Buffs</h2>
-            <button id="addItemBtn" style="padding: 4px 10px; background-color:#d29922; border:none; border-radius:4px; color:white; cursor:pointer;">+ New</button>
-        </div>
+            <div class="battle-results-wrapper">
+                <div class="battle-chart-area">
+                    <h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & TTK</h4>
+                    <div style="flex:1; position:relative; min-height: 200px;">
+                        <canvas id="battleResultChart"></canvas>
+                    </div>
+                </div>
 
-        <div id="itemContainer"></div>
-        
-        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #3e3e42; color: #888; font-size: 0.8em;">
-            * Items apply to checked entities.
+                <div class="battle-log-area">
+                    <h4 style="margin:0 0 5px 0; color:#ccc;">Log</h4>
+                    <div id="battleLog" class="log-container">
+                        <div class="placeholder">Select entities and press FIGHT</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -1,37 +1,57 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
-const path = require('path')
-const fs = require('fs')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
 
 function createWindow () {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 900,
-    backgroundColor: '#1e1e1e',
+    width: 1280,
+    height: 800,
+    icon: path.join(__dirname, 'assets/AppIcon.png'),
+    minWidth: 1000,
+    minHeight: 700,
+    frame: false,
+    backgroundColor: '#202225',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     }
-  })
+  });
 
-  win.setMenuBarVisibility(false)
-  win.loadFile('index.html')
+  win.setMenuBarVisibility(false);
+  win.loadFile('index.html');
+
+  ipcMain.on('minimize-app', () => {
+    win.minimize();
+  });
+
+  ipcMain.on('maximize-app', () => {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  });
+
+  ipcMain.on('close-app', () => {
+    win.close();
+  });
 }
 
 app.whenReady().then(() => {
-  createWindow()
+  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createWindow();
     }
-  })
-})
+  });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
+    app.quit();
   }
-})
+});
 
 ipcMain.on('save-json', (event, data) => {
     dialog.showSaveDialog({
