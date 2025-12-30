@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Balance Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Global Settings</h2>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <label style="margin:0; width: 80px;">Max Level:</label>
+            <input type="number" id="maxLevel" value="20">
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Entities</h2>
+            <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e;">+ Add</button>
+        </div>
+        
+        <div id="entityContainer">
+            </div>
+
+        <div style="margin-top: auto; border-top: 1px solid #3e3e42; padding-top: 15px;">
+            <button class="btn" id="calcBtn">Run Simulation</button>
+            <button class="btn" id="exportBtn" style="background-color: #d29922;">Export CSV</button>
+            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                <button class="btn" id="saveBtn" style="background-color: #2da44e;">Save</button>
+                <button class="btn" id="loadBtn" style="background-color: #6a737d;">Load</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <h3>Simulation Result</h3>
+        <div class="chart-container">
+            <canvas id="balanceChart"></canvas>
+        </div>
+        <div class="analysis-panel">
+            <h3>🔍 Balance Analysis (Cross-over Detection)</h3>
+            <div id="analysisLog" class="log-container">
+                <div class="log-item placeholder">Run simulation to see analysis...</div>
+            </div>
+        </div>
+    </div>
+    <div class="sidebar right-sidebar">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Item / Buffs</h2>
+            <button id="addItemBtn" style="padding: 4px 10px; background-color:#d29922; border:none; border-radius:4px; color:white; cursor:pointer;">+ New</button>
+        </div>
+
+        <div id="itemContainer"></div>
+            
+        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #3e3e42; color: #888; font-size: 0.8em;">
+            * Items apply to ALL entities for testing balance impact.
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+/* 기본 설정 유지 */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    margin: 0;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 사이드바 개선: 스크롤바 디자인 및 레이아웃 */
+.sidebar {
+    width: 320px; /* 조금 더 넓힘 */
+    background-color: #252526;
+    padding: 15px;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto; /* 내용 많으면 스크롤 */
+    flex-shrink: 0;
+}
+
+/* 스크롤바 커스텀 (다크모드 어울리게) */
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-track { background: #252526; }
+.sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: #555; }
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    background-color: #1e1e1e;
+    overflow: hidden;
+}
+
+h2, h3 {
+    margin-top: 0;
+    color: #ffffff;
+    border-bottom: 1px solid #3e3e42;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.entity-card {
+    background-color: #333333;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #3e3e42;
+    margin-bottom: 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* 요소 간 간격 추가 */
+}
+
+.entity-header {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.entity-stats {
+    display: flex;
+    gap: 8px;
+}
+
+/* 수식 입력칸 스타일 추가 */
+.entity-formula {
+    width: 100%;
+}
+
+.entity-formula input {
+    width: 100%;
+    font-family: 'Consolas', monospace; /* 코드처럼 보이게 */
+    color: #ffd700; /* 노란색 텍스트 강조 */
+    background-color: #252526;
+}
+
+/* 입력 필드 스타일 최적화 */
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 6px;
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* 컬러 피커 스타일 */
+input[type="color"] {
+    background: none;
+    border: none;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    padding: 0;
+}
+
+/* 삭제 버튼 (X) */
+.delete-btn {
+    background: transparent;
+    border: none;
+    color: #ff5555;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 5px;
+}
+.delete-btn:hover { color: #ff8888; }
+
+/* 공통 버튼 */
+.btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #007acc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 5px;
+}
+.btn:hover { filter: brightness(1.1); }
+
+.chart-container {
+    flex: 1;
+    background-color: #2d2d30;
+    border-radius: 8px;
+    padding: 15px;
+    position: relative;
+}
+
+/* ... 기존 코드 ... */
+
+/* ▼▼▼ 수식 도구 모음 스타일 (새로 추가) ▼▼▼ */
+.formula-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed #3e3e42;
+}
+
+.tool-btn {
+    background-color: #3e3e42;
+    border: 1px solid #555;
+    color: #ccc;
+    font-family: 'Consolas', monospace;
+    font-size: 0.8em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tool-btn:hover {
+    background-color: #505055;
+    color: white;
+    border-color: #777;
+}
+
+/* 변수 버튼(b, g, lv)은 색상을 다르게 하여 구분 */
+.tool-btn.var {
+    background-color: #2b5672; /* 톤다운된 파란색 */
+    border-color: #4a7a9b;
+    color: #fff;
+}
+.tool-btn.var:hover {
+    background-color: #007acc;
+}
+
+
+.analysis-panel {
+    margin-top: 20px;
+    background-color: #252526;
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid #3e3e42;
+    flex: 0 0 200px; /* 높이 고정 (필요시 조절) */
+    display: flex;
+    flex-direction: column;
+}
+
+.log-container {
+    flex: 1;
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 10px;
+    overflow-y: auto; /* 내용 많으면 스크롤 */
+    font-family: 'Consolas', monospace;
+    font-size: 0.9em;
+}
+
+.log-item {
+    padding: 6px 8px;
+    border-bottom: 1px solid #2d2d30;
+    color: #ccc;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.log-item:last-child {
+    border-bottom: none;
+}
+
+/* 역전(Crossover) 강조 스타일 */
+.log-tag {
+    background-color: #dcdcaa;
+    color: #1e1e1e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.8em;
+}
+
+.log-level {
+    color: #569cd6; /* 파란색 숫자 */
+    font-weight: bold;
+}
+
+.placeholder {
+    color: #666;
+    font-style: italic;
+    justify-content: center;
+    padding-top: 20px;
+}
+
+/* ... 기존 CSS ... */
+
+/* 오른쪽 사이드바 스타일 (왼쪽과 비슷하지만 구분되게) */
+.right-sidebar {
+    width: 300px; /* 너비 */
+    background-color: #1e1e1e; /* 메인보다 약간 어둡거나 같게 */
+    border-left: 1px solid #3e3e42; /* 왼쪽 경계선 */
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+/* 아이템 카드 스타일 */
+.item-card {
+    background-color: #252526;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-left: 4px solid #d29922;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.item-row {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.item-toggle {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* ... 기존 CSS ... */
+
+/* ▼▼▼ 아이템 타겟 선택 영역 (새로 추가) ▼▼▼ */
+.item-targets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #444;
+}
+
+.target-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8em;
+    color: #ccc;
+    background-color: #333;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #444;
+}
+
+.target-checkbox:hover {
+    background-color: #444;
+    border-color: #666;
+}
+
+/* 체크되었을 때 강조 */
+.target-checkbox input:checked + span {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+select.dark-select {
+    background-color: #3e3e42;
+    color: white;
+    border: 1px solid #555;
+    padding: 4px;
+    border-radius: 4px;
+    flex: 1;
+}
