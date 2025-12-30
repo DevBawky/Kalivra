@@ -1,10 +1,20 @@
 {
   "name": "kalivra",
   "version": "1.0.0",
-  "build":{
+  "description": "Kalivra Application",
+  "main": "main.js",
+  "author": "Bawky",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "productName": "Kalivra",
     "appId": "com.Bawky.kalivra",
-    "directories":{
-      "buildResources": "assets"
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
     },
     "win": {
       "target": "nsis",
@@ -19,15 +29,9 @@
       "icon": "assets/icon.png"
     }
   },
-  "main": "main.js",
-  "scripts": {
-    "start": "electron ."
-  },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "devDependencies": {
-    "electron": "^39.2.7"
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
   }
 }
