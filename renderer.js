@@ -17,7 +17,7 @@ const dom = {
 };
 
 // ==========================================
-// 1. Undo / Redo System (완벽 구현)
+// 1. Undo / Redo System
 // ==========================================
 const undoStack = [];
 const redoStack = [];
@@ -25,10 +25,10 @@ const redoStack = [];
 function executeCommand(command) {
     command.execute();
     undoStack.push(command);
-    redoStack.length = 0; // 새로운 명령 실행 시 Redo 스택 초기화
+    redoStack.length = 0;
 }
 
-// [Command] 값 변경
+// [Command Classes]
 class PropertyChangeCommand {
     constructor(targetObj, key, oldVal, newVal, callback) {
         this.target = targetObj; this.key = key; this.oldVal = oldVal; this.newVal = newVal; this.callback = callback;
@@ -37,7 +37,6 @@ class PropertyChangeCommand {
     undo() { this.target[this.key] = this.oldVal; if(this.callback) this.callback(); }
 }
 
-// [Command] 스탯 변경
 class StatChangeCommand {
     constructor(statObj, type, oldVal, newVal, callback) {
         this.statObj = statObj; this.type = type; this.oldVal = oldVal; this.newVal = newVal; this.callback = callback;
@@ -46,57 +45,78 @@ class StatChangeCommand {
     undo() { this.statObj[this.type] = this.oldVal; if(this.callback) this.callback(); }
 }
 
-// [Command] 엔티티 관리
+class ItemModChangeCommand {
+    constructor(modifier, key, oldVal, newVal, callback) {
+        this.modifier = modifier; this.key = key; this.oldVal = oldVal; this.newVal = newVal; this.callback = callback;
+    }
+    execute() { this.modifier[this.key] = this.newVal; if(this.callback) this.callback(); }
+    undo() { this.modifier[this.key] = this.oldVal; if(this.callback) this.callback(); }
+}
+
+class AddItemModCommand {
+    constructor(item, modData, callback) {
+        this.item = item; this.modData = modData; this.callback = callback;
+    }
+    execute() { this.item.modifiers.push(this.modData); if(this.callback) this.callback(); }
+    undo() { this.item.modifiers.pop(); if(this.callback) this.callback(); }
+}
+
+class RemoveItemModCommand {
+    constructor(item, index, callback) {
+        this.item = item; this.index = index; this.removedMod = null; this.callback = callback;
+    }
+    execute() { 
+        this.removedMod = this.item.modifiers[this.index];
+        this.item.modifiers.splice(this.index, 1);
+        if(this.callback) this.callback(); 
+    }
+    undo() { 
+        this.item.modifiers.splice(this.index, 0, this.removedMod);
+        if(this.callback) this.callback(); 
+    }
+}
+
 class RemoveEntityCommand {
     constructor(index) { this.index = index; this.removedData = null; }
     execute() { this.removedData = DM.getEntities()[this.index]; DM.removeEntity(this.index); refreshAll(); runSimulation(); }
     undo() { DM.getEntities().splice(this.index, 0, this.removedData); refreshAll(); runSimulation(); }
 }
+
 class AddEntityCommand {
     constructor(entityData) { this.entityData = entityData; }
     execute() { DM.addEntity(this.entityData); refreshAll(); runSimulation(); }
     undo() { DM.removeEntity(DM.getEntities().length - 1); refreshAll(); runSimulation(); }
 }
 
-// [Command] 아이템 관리
 class RemoveItemCommand {
     constructor(index) { this.index = index; this.removedData = null; }
-    execute() { 
-        this.removedData = DM.getItems()[this.index];
-        DM.getItems().splice(this.index, 1); 
-        refreshAll(); 
-        runSimulation(); 
-    }
-    undo() { 
-        DM.getItems().splice(this.index, 0, this.removedData);
-        refreshAll(); 
-        runSimulation(); 
-    }
+    execute() { this.removedData = DM.getItems()[this.index]; DM.getItems().splice(this.index, 1); refreshAll(); runSimulation(); }
+    undo() { DM.getItems().splice(this.index, 0, this.removedData); refreshAll(); runSimulation(); }
 }
+
 class AddItemCommand {
     constructor(itemData) { this.itemData = itemData; }
     execute() { DM.addItem(this.itemData); refreshAll(); runSimulation(); }
     undo() { DM.getItems().pop(); refreshAll(); runSimulation(); }
 }
 
-// [수정] 단축키 이벤트 리스너 (Redo 로직 추가됨)
+// 단축키 설정
 document.addEventListener('keydown', (e) => {
     // Undo (Ctrl+Z)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (undoStack.length > 0) {
             const cmd = undoStack.pop();
             cmd.undo();
-            redoStack.push(cmd); // [버그수정] 스택 전체가 아니라 명령어 하나만 push
-            runSimulation();
+            redoStack.push(cmd);
+            // 커맨드 내부 콜백에서 refreshAll()을 호출하므로 여기서는 추가 호출 불필요
         }
     }
     // Redo (Ctrl+Y)
     if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
         if (redoStack.length > 0) {
             const cmd = redoStack.pop();
-            cmd.execute(); // 다시 실행
-            undoStack.push(cmd); // 다시 Undo 스택으로 이동
-            runSimulation();
+            cmd.execute();
+            undoStack.push(cmd);
         }
     }
 });
@@ -108,12 +128,26 @@ function refreshAll() {
     dom.entCont.innerHTML = '';
     dom.itemCont.innerHTML = '';
     
+    // 화면 갱신 함수 (커맨드 콜백용)
+    // Undo/Redo 시 화면도 다시 그리고 그래프도 다시 그려야 함
+    const updateUI = () => {
+        refreshAll();
+        runSimulation();
+    };
+
     // Entities
     DM.getEntities().forEach((ent, idx) => {
         UI.renderEntityCard(ent, idx, dom.entCont, {
+            // 입력 중일 때는 그래프만 갱신 (화면 깜빡임 방지)
             onInput: () => runSimulation(),
-            onCommit: (key, oldVal, newVal) => { if (oldVal !== newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, runSimulation)); },
-            onStatCommit: (statObj, type, oldVal, newVal) => { if (oldVal !== newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, runSimulation)); },
+            
+            // [중요 수정] Commit 시에는 updateUI를 호출하여 refreshAll() 수행
+            onCommit: (key, oldVal, newVal) => {
+                if (oldVal !== newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI));
+            },
+            onStatCommit: (statObj, type, oldVal, newVal) => {
+                if (oldVal !== newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI));
+            },
             onLock: () => { ent.isLocked = !ent.isLocked; refreshAll(); },
             onDelete: (i) => executeCommand(new RemoveEntityCommand(i))
         });
@@ -122,9 +156,28 @@ function refreshAll() {
     // Items
     DM.getItems().forEach((item, idx) => {
         UI.renderItemCard(item, idx, dom.itemCont, {
-            onChange: runSimulation,
-            onUpdate: () => { refreshAll(); runSimulation(); },
-            onDelete: (i) => executeCommand(new RemoveItemCommand(i))
+            onChange: () => runSimulation(),
+            onInput: () => runSimulation(),
+            onUpdate: updateUI,
+            
+            // [중요 수정] 아이템 관련 커밋들도 모두 updateUI 사용
+            onNameCommit: (oldVal, newVal) => {
+                if(oldVal !== newVal) executeCommand(new PropertyChangeCommand(item, 'name', oldVal, newVal, updateUI));
+            },
+            onDelete: (i) => executeCommand(new RemoveItemCommand(i)),
+            
+            onModAdd: () => {
+                const newMod = {stat: DM.getRules().stats[0], op:'add', val:0};
+                executeCommand(new AddItemModCommand(item, newMod, updateUI));
+            },
+            onModDelete: (modIdx) => {
+                executeCommand(new RemoveItemModCommand(item, modIdx, updateUI));
+            },
+            onModCommit: (mod, key, oldVal, newVal) => {
+                if(oldVal !== newVal) {
+                    executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI));
+                }
+            }
         });
     });
 }
@@ -150,6 +203,7 @@ function runSimulation() {
 
     Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
     
+    // Crossover Analysis
     const crossovers = Sim.analyzeCrossovers(rawData, max);
     dom.analysisLog.innerHTML = crossovers.length ? '' : '<div class="log-item placeholder">No crossover points detected.</div>';
     crossovers.forEach(c => {
@@ -157,7 +211,7 @@ function runSimulation() {
     });
 }
 
-// Config Modal
+// ... (아래 Config Modal, Event Listeners 등은 기존과 동일) ...
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
     const rules = DM.getRules();
@@ -174,7 +228,6 @@ document.getElementById('applyConfigBtn').addEventListener('click', () => {
     refreshAll(); runSimulation();
 });
 
-// Event Listeners
 document.getElementById('addBtn').addEventListener('click', () => {
     const color = '#' + Math.floor(Math.random()*16777215).toString(16);
     let stats = {}; DM.getRules().stats.forEach(s => stats[s] = {b:10, g:1});
