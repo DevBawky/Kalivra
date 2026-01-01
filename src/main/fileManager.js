@@ -1,32 +1,59 @@
 const fs = require('fs');
 const { dialog } = require('electron');
 
-async function saveJson(window, data) {
+async function saveKal(window, data) {
     const result = await dialog.showSaveDialog(window, {
-        title: 'Save Project', defaultPath: 'balance_project.json',
-        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+        title: 'Save Kalivra Project',
+        defaultPath: 'project.kal',
+        filters: [
+            { name: 'Kalivra Files', extensions: ['kal'] },
+            { name: 'All Files', extensions: ['*'] }
+        ]
     });
+
     if (!result.canceled && result.filePath) {
-        fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
-        return 'Project saved.';
+        let savePath = result.filePath;
+        if (!savePath.endsWith('.kal')) {
+            savePath += '.kal';
+        }
+
+        try {
+            fs.writeFileSync(savePath, JSON.stringify(data, null, 2));
+            return 'Project saved successfully.';
+        } catch (err) {
+            console.error(err);
+            return 'Save failed.';
+        }
     }
     return null;
 }
 
-async function loadJson(window) {
+async function loadKal(window) {
     const result = await dialog.showOpenDialog(window, {
-        title: 'Load Project', properties: ['openFile'],
-        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+        title: 'Load Kalivra Project',
+        properties: ['openFile'],
+        filters: [
+            { name: 'Kalivra Files', extensions: ['kal'] },
+            { name: 'All Files', extensions: ['*'] }
+        ]
     });
+
     if (!result.canceled && result.filePaths.length > 0) {
-        return JSON.parse(fs.readFileSync(result.filePaths[0], 'utf-8'));
+        try {
+            const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+            return JSON.parse(content);
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
     }
     return null;
 }
 
 async function exportCsv(window, content) {
     const result = await dialog.showSaveDialog(window, {
-        title: 'Export to CSV', defaultPath: 'BalanceTable.csv',
+        title: 'Export to CSV',
+        defaultPath: 'BalanceTable.csv',
         filters: [{ name: 'CSV Files', extensions: ['csv'] }]
     });
     if (!result.canceled && result.filePath) {
@@ -36,4 +63,4 @@ async function exportCsv(window, content) {
     return null;
 }
 
-module.exports = { saveJson, loadJson, exportCsv };
+module.exports = { saveKal, loadKal, exportCsv };
