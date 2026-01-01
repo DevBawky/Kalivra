@@ -20,6 +20,28 @@
         </div>
     </div>
 
+    <div class="top-toolbar">
+        <div class="toolbar-group">
+            <button id="calcBtn" class="tool-btn primary">
+                <span>▶</span>
+            </button>
+            <button id="exportBtn" class="tool-btn warning">
+                <span>📄</span>
+            </button>
+        </div>
+        
+        <div class="toolbar-divider"></div>
+        
+        <div class="toolbar-group">
+            <button id="saveBtn" class="tool-btn success">
+                <span>💾</span>
+            </button>
+            <button id="loadBtn" class="tool-btn secondary">
+                <span>📂</span>
+            </button>
+        </div>
+    </div>
+
     <div class="app-container">
         <div class="sidebar" id="leftSidebar">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -39,15 +61,7 @@
             
             <div id="entityContainer"></div>
 
-            <div style="margin-top: auto; border-top: 1px solid #3e3e42; padding-top: 15px;">
-                <button class="btn" id="calcBtn">Run Simulation</button>
-                <button class="btn" id="exportBtn" style="background-color: #d29922;">Export CSV</button>
-                <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <button class="btn" id="saveBtn" style="background-color: #2da44e;">Save</button>
-                    <button class="btn" id="loadBtn" style="background-color: #6a737d;">Load</button>
-                </div>
             </div>
-        </div>
 
         <div class="resizer" id="resizerLeft"></div>
 
