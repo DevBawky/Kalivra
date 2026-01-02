@@ -7,53 +7,49 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/modules.css">
-
     <style>
-        /* 상단 툴바 레이아웃 */
-        .top-toolbar {
-            display: flex; align-items: center; gap: 15px; height: 40px;
-            background-color: #252526; border-bottom: 1px solid #3e3e42;
-            padding: 0 15px; box-sizing: border-box; user-select: none;
+        /* [중요] 차트가 안 보이는 문제 해결을 위해 높이 지정 */
+        .chart-container {
+            position: relative;
+            flex: 1;
+            min-height: 0; /* Flexbox 내에서 캔버스 크기 문제 방지 */
+            width: 100%;
+            background-color: #202225;
         }
+
+        /* (이하 기존 스타일 유지) */
+        .top-toolbar { display: flex; align-items: center; gap: 15px; height: 40px; background-color: #252526; border-bottom: 1px solid #3e3e42; padding: 0 15px; box-sizing: border-box; user-select: none; }
         .toolbar-group { display: flex; gap: 8px; }
         .toolbar-divider { width: 1px; height: 20px; background-color: #454545; margin: 0 5px; }
-
-        /* 툴바 버튼 스타일 */
-        .tool-btn {
-            display: flex; align-items: center; justify-content: center;
-            height: 28px; padding: 0 12px;
-            border: 1px solid transparent; border-radius: 4px;
-            background-color: transparent; color: #cccccc;
-            font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit;
-        }
+        .tool-btn { display: flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: 4px; background-color: transparent; color: #cccccc; font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
         .tool-btn:hover { background-color: #3e3e42; color: white; border: 1px solid #555; }
-        .tool-btn:active { background-color: #2d2d30; transform: translateY(1px); }
         .tool-btn.primary { color: #5fabff; font-weight: bold; }
         .tool-btn.warning { color: #d29922; }
         .tool-btn.success { color: #2da44e; }
         .tool-btn.secondary { color: #b9bbbe; }
         .tool-btn span { margin-right: 6px; }
-
-        /* [추가] 스탯 설명 입력창 스타일 */
-        .desc-input {
-            width: 100%; height: 80px; 
-            background-color: #1e1e1e; border: 1px solid #3e3e42; 
-            color: #ccc; padding: 8px; font-family: monospace; resize: vertical;
-        }
-        
-        /* [추가] 스탯 라벨 호버 효과 */
-        .stat-label-text {
-            cursor: help; text-decoration: underline dotted #666;
-        }
+        .desc-input { width: 100%; height: 80px; background-color: #1e1e1e; border: 1px solid #3e3e42; color: #ccc; padding: 8px; font-family: monospace; resize: vertical; }
+        .stat-label-text { cursor: help; text-decoration: underline dotted #666; }
+        .input-error { border: 2px solid #e74c3c !important; background-color: #3a1d1d !important; color: #ffcccc !important; }
+        .snapshot-list { max-height: 300px; overflow-y: auto; border: 1px solid #3e3e42; background: #1e1e1e; margin-bottom: 10px; }
+        .snapshot-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #2d2d30; cursor: pointer; }
+        .snapshot-item:hover { background-color: #2a2d3e; }
+        .snapshot-info { display: flex; flex-direction: column; }
+        .snapshot-name { font-weight: bold; color: #eee; }
+        .snapshot-date { font-size: 0.8em; color: #888; }
+        .snapshot-actions button { background: none; border: none; cursor: pointer; color: #888; margin-left: 5px; }
+        .snapshot-actions button:hover { color: #fff; }
+        .snapshot-actions .load-btn { color: #2da44e; }
+        .snapshot-actions .del-btn { color: #e74c3c; }
     </style>
 </head>
 <body>
     <div class="custom-title-bar">
         <div class="title-drag-area"><span class="app-title">Kalivra</span></div>
         <div class="window-controls">
-            <button id="minBtn" class="win-btn" title="Minimize">─</button>
-            <button id="maxBtn" class="win-btn" title="Maximize">◻</button>
-            <button id="closeBtn" class="win-btn close-btn" title="Close">✕</button>
+            <button id="minBtn" class="win-btn">─</button>
+            <button id="maxBtn" class="win-btn">◻</button>
+            <button id="closeBtn" class="win-btn close-btn">✕</button>
         </div>
     </div>
 
@@ -67,6 +63,10 @@
             <button id="saveBtn" class="tool-btn success"><span>💾</span> Save</button>
             <button id="loadBtn" class="tool-btn secondary"><span>📂</span> Load</button>
         </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <button id="snapshotBtn" class="tool-btn" style="color: #d7ba7d;"><span>📷</span> Snapshots</button>
+        </div>
     </div>
 
     <div class="app-container">
@@ -75,17 +75,14 @@
                 <h2>Global Settings</h2>
                 <button id="configBtn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">Config</button>
             </div>
-            
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                 <label style="margin:0; width: 80px;">Max Level:</label>
                 <input type="number" id="maxLevel" value="20">
             </div>
-
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h2>Entities</h2>
                 <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e;">+ Add</button>
             </div>
-            
             <div id="entityContainer"></div>
         </div>
 
@@ -130,33 +127,32 @@
 
     <div id="configModal" class="modal">
         <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3>Game Rules & Formulas</h3>
-                <span class="close-modal">&times;</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3>Game Rules & Info</h3><span class="close-modal">&times;</span></div>
+            <div class="config-section" style="background:#252526; padding:10px; border-radius:4px; margin-bottom:15px;">
+                <label style="color:#5fabff;">Project Meta Info</label>
+                <div style="display:flex; gap:10px; margin-bottom:5px;">
+                    <input type="text" id="metaProjectName" placeholder="Project Name" style="flex:2;">
+                    <input type="text" id="metaAuthor" placeholder="Author" style="flex:1;">
+                </div>
+                <input type="text" id="metaDesc" placeholder="Description / Version Note" style="width:100%;">
             </div>
-            
-            <div class="config-section">
-                <label>Main Damage Formula</label>
-                <input type="text" id="dmgFormula" class="formula-input">
-            </div>
-    
-            <div class="config-section">
-                <label>Combat Power (CP) Formula</label>
-                <input type="text" id="cpFormula" class="formula-input">
-            </div>
-            
-            <div class="config-section">
-                <label>Define Stats (Comma Separated)</label>
-                <input type="text" id="statDefinitions" placeholder="e.g. hp, atk, def">
-            </div>
+            <div class="config-section"><label>Main Damage Formula</label><input type="text" id="dmgFormula" class="formula-input"></div>
+            <div class="config-section"><label>Combat Power (CP) Formula</label><input type="text" id="cpFormula" class="formula-input"></div>
+            <div class="config-section"><label>Define Stats</label><input type="text" id="statDefinitions" placeholder="e.g. hp, atk, def"></div>
+            <div class="config-section"><label>Stat Descriptions</label><textarea id="statDescInput" class="desc-input" placeholder="hp: Health Point..."></textarea></div>
+            <button class="btn" id="applyConfigBtn">Apply Rules & Info</button>
+        </div>
+    </div>
 
-            <div class="config-section">
-                <label>Stat Descriptions (Format: stat: description)</label>
-                <textarea id="statDescInput" class="desc-input" placeholder="hp: Health Point&#10;atk: Attack Damage&#10;def: Defense"></textarea>
-                <p style="font-size:0.8em; color:#888;">* One description per line. Shows on hover.</p>
+    <div id="snapshotModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3>Balance Snapshots</h3><span class="close-snapshot">&times;</span></div>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="newSnapshotName" placeholder="Snapshot Name" style="flex:1;">
+                <button id="createSnapshotBtn" class="btn" style="width:auto; background-color:#2da44e;">+ Create</button>
             </div>
-    
-            <button class="btn" id="applyConfigBtn">Apply Rules</button>
+            <div class="snapshot-list" id="snapshotListContainer"></div>
+            <p style="font-size:0.8em; color:#888;">* Snapshots save the current state of all Entities, Items, and Rules.</p>
         </div>
     </div>
 
@@ -166,44 +162,17 @@
                 <h3>Battle Simulator</h3>
                 <span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span>
             </div>
-            
             <div class="battle-controls">
-                <div class="battle-control-group" style="flex:1;">
-                    <label style="color:#007acc;">Attacker</label>
-                    <select id="battleEntA" class="dark-select"></select>
-                </div>
+                <div class="battle-control-group" style="flex:1;"><label style="color:#007acc;">Attacker</label><select id="battleEntA" class="dark-select"></select></div>
                 <div style="align-self:end; padding-bottom:10px; font-weight:bold; color:#888;">VS</div>
-                <div class="battle-control-group" style="flex:1;">
-                    <label style="color:#ff5555;">Opponent</label>
-                    <select id="battleEntB" class="dark-select">
-                        <option value="all">ALL (League)</option>
-                    </select>
-                </div>
-                <div class="battle-control-group" style="width:80px;">
-                    <label>Level</label>
-                    <input type="number" id="battleLevel" value="20">
-                </div>
-                <div class="battle-control-group" style="width:80px;">
-                    <label>Count</label>
-                    <input type="number" id="battleCount" value="100">
-                </div>
+                <div class="battle-control-group" style="flex:1;"><label style="color:#ff5555;">Opponent</label><select id="battleEntB" class="dark-select"><option value="all">ALL (League)</option></select></div>
+                <div class="battle-control-group" style="width:80px;"><label>Level</label><input type="number" id="battleLevel" value="20"></div>
+                <div class="battle-control-group" style="width:80px;"><label>Count</label><input type="number" id="battleCount" value="100"></div>
                 <button id="runBattleBtn" class="btn" style="width:auto; height:36px; background-color:#e74c3c;">FIGHT</button>
             </div>
-
             <div class="battle-results-wrapper">
-                <div class="battle-chart-area">
-                    <h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & TTK</h4>
-                    <div style="flex:1; position:relative; min-height: 200px;">
-                        <canvas id="battleResultChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="battle-log-area">
-                    <h4 style="margin:0 0 5px 0; color:#ccc;">Log</h4>
-                    <div id="battleLog" class="log-container">
-                        <div class="placeholder">Select entities and press FIGHT</div>
-                    </div>
-                </div>
+                <div class="battle-chart-area"><h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & TTK</h4><div style="flex:1; position:relative; min-height: 200px;"><canvas id="battleResultChart"></canvas></div></div>
+                <div class="battle-log-area"><h4 style="margin:0 0 5px 0; color:#ccc;">Log</h4><div id="battleLog" class="log-container"><div class="placeholder">Select entities and press FIGHT</div></div></div>
             </div>
         </div>
     </div>
