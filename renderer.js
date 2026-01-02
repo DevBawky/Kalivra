@@ -16,9 +16,20 @@ const dom = {
     analysisLog: document.getElementById('analysisLog')
 };
 
-// ==========================================
-// [신규] 유틸리티: 디바운스 함수 (입력 렉 방지용)
-// ==========================================
+const originalAlert = window.alert;
+const originalConfirm = window.confirm;
+
+window.alert = function(message) {
+    originalAlert(message);
+    ipcRenderer.send('force-focus');
+};
+
+window.confirm = function(message) {
+    const result = originalConfirm(message);
+    ipcRenderer.send('force-focus');
+    return result;
+};
+
 function debounce(func, timeout = 300) {
     let timer;
     return (...args) => {
@@ -27,7 +38,7 @@ function debounce(func, timeout = 300) {
     };
 }
 
-// 시뮬레이션을 디바운싱 처리 (타자 칠 때는 실행 안 하다가 멈추면 0.2초 뒤 실행)
+// 시뮬레이션을 디바운싱 처리
 const debouncedSimulation = debounce(() => {
     runSimulation();
 }, 200);
@@ -45,7 +56,7 @@ function executeCommand(command) {
     redoStack.length = 0;
 }
 
-// Command Classes (기존 유지)
+// Command Classes
 class PropertyChangeCommand { constructor(t,k,o,n,cb){this.t=t;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.t[this.k]=this.n;if(this.cb)this.cb();} undo(){this.t[this.k]=this.o;if(this.cb)this.cb();} }
 class StatChangeCommand { constructor(s,t,o,n,cb){this.s=s;this.t=t;this.o=o;this.n=n;this.cb=cb;} execute(){this.s[this.t]=this.n;if(this.cb)this.cb();} undo(){this.s[this.t]=this.o;if(this.cb)this.cb();} }
 class ItemModChangeCommand { constructor(m,k,o,n,cb){this.m=m;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.m[this.k]=this.n;if(this.cb)this.cb();} undo(){this.m[this.k]=this.o;if(this.cb)this.cb();} }
@@ -68,15 +79,12 @@ function refreshAll() {
     dom.entCont.innerHTML = '';
     dom.itemCont.innerHTML = '';
     
-    // UI 업데이트 (구조 변경 시 사용)
     const updateUI = () => { refreshAll(); runSimulation(); };
 
     // Entities
     DM.getEntities().forEach((ent, idx) => {
         UI.renderEntityCard(ent, idx, dom.entCont, {
-            // [수정] onInput 시 즉시 실행하지 않고, 디바운스된 함수 호출 -> 렉 해결!
             onInput: () => debouncedSimulation(),
-            
             onCommit: (key, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI)); },
             onStatCommit: (statObj, type, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI)); },
             onLock: () => { ent.isLocked = !ent.isLocked; refreshAll(); },
@@ -87,11 +95,8 @@ function refreshAll() {
     // Items
     DM.getItems().forEach((item, idx) => {
         UI.renderItemCard(item, idx, dom.itemCont, {
-            onChange: () => runSimulation(), // 체크박스는 즉시 반영해도 됨 (가벼움)
-            
-            // [수정] 아이템 값 입력도 디바운스 적용
+            onChange: () => runSimulation(),
             onInput: () => debouncedSimulation(),
-            
             onUpdate: updateUI,
             onNameCommit: (oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new PropertyChangeCommand(item, 'name', oldVal, newVal, updateUI)); },
             onDelete: (i) => executeCommand(new RemoveItemCommand(i)),
@@ -110,7 +115,7 @@ function runSimulation() {
     
     const validCheck = Sim.validateFormula(formula, rules.stats);
     if (!validCheck.valid) {
-        // console.warn("Invalid Formula:", validCheck.error);
+        // formula가 틀렸을 때의 처리는 focusout 이벤트 리스너가 담당하므로 여기선 return
         return; 
     }
 
@@ -141,11 +146,8 @@ function runSimulation() {
 }
 
 // ==========================================
-// 3. Config & Meta Info & Snapshots (기존 유지)
+// 3. Config & Meta Info & Snapshots
 // ==========================================
-// (이 아래 코드는 변경사항이 없으므로, 기존 코드의 Config Modal, Snapshot, Event Listeners 등을 그대로 유지하세요.
-// 다만 'debouncedSimulation'을 쓰지 않는 버튼들(Battle 등)은 그대로 두어도 됩니다.)
-
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
     const rules = DM.getRules();
@@ -167,20 +169,38 @@ document.getElementById('configBtn').addEventListener('click', () => {
 });
 document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
 
+
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
     const dmgInput = document.getElementById('dmgFormula');
     const cpInput = document.getElementById('cpFormula');
-    const rawStats = document.getElementById('statDefinitions').value;
+    const statInput = document.getElementById('statDefinitions');
+
+    const rawStats = statInput.value;
     const newStats = rawStats.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (newStats.length === 0) { alert("At least one stat is required!"); return; }
+
+    const showError = (msg, targetInput) => {
+        alert(msg);
+        ipcRenderer.send('force-focus'); 
+        setTimeout(() => { if(targetInput) targetInput.focus(); }, 50);
+    };
+
+    if (newStats.length === 0) { cpInput.classList.add('input-error');  return; }
 
     const dmgCheck = Sim.validateFormula(dmgInput.value, newStats);
-    if (!dmgCheck.valid) { alert("Invalid Damage Formula:\n" + dmgCheck.error); dmgInput.classList.add('input-error'); return; }
-    else { dmgInput.classList.remove('input-error'); }
+    if (!dmgCheck.valid) { 
+        dmgInput.classList.add('input-error'); 
+        return; 
+    } else { 
+        dmgInput.classList.remove('input-error'); 
+    }
 
     const cpCheck = Sim.validateFormula(cpInput.value, newStats);
-    if (!cpCheck.valid) { alert("Invalid CP Formula:\n" + cpCheck.error); cpInput.classList.add('input-error'); return; }
-    else { cpInput.classList.remove('input-error'); }
+    if (!cpCheck.valid) { 
+        cpInput.classList.add('input-error'); 
+        return; 
+    } else { 
+        cpInput.classList.remove('input-error'); 
+    }
 
     const rawDesc = document.getElementById('statDescInput').value;
     const descriptions = {};
@@ -194,7 +214,8 @@ document.getElementById('applyConfigBtn').addEventListener('click', () => {
     DM.getEntities().forEach(ent => { newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; }); });
 
     configModal.style.display = 'none';
-    refreshAll(); runSimulation();
+    refreshAll(); 
+    runSimulation();
 });
 
 const snapshotModal = document.getElementById('snapshotModal');
@@ -219,8 +240,20 @@ function renderSnapshots() {
                 snapshotModal.style.display='none'; 
                 setTimeout(() => window.focus(), 50);
             } 
+            else{
+                setTimeout(() => window.focus(), 50);
+            }
         });
-        item.querySelector('.del-btn').addEventListener('click', (e) => { e.stopPropagation(); if(confirm('Delete snapshot?')) { DM.deleteSnapshot(idx); renderSnapshots(); } });
+        item.querySelector('.del-btn').addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            if(confirm('Delete snapshot?')) { 
+                DM.deleteSnapshot(idx); 
+                renderSnapshots(); 
+                setTimeout(() => window.focus(), 50);
+            } else {
+                setTimeout(() => window.focus(), 50);
+            }
+        });
         snapshotListCont.appendChild(item);
     });
 }
@@ -242,19 +275,14 @@ ipcRenderer.on('load-finished', (e, data) => {
     DM.loadProject(data);
     undoStack.length = 0; 
     redoStack.length = 0;
-    
     const meta = DM.getMeta();
     if(meta.projectName) document.title = `Kalivra - ${meta.projectName}`;
-    
     refreshAll(); 
     runSimulation();
-
     console.log(`Project Loaded: ${meta.projectName || 'Untitled'}`);
-
     setTimeout(() => {
         window.focus();
         const focusTarget = document.querySelector('input, select, textarea');
-        
         if (focusTarget) {
             focusTarget.focus();
             if (focusTarget.type === 'text' || focusTarget.type === 'number') {
@@ -263,8 +291,15 @@ ipcRenderer.on('load-finished', (e, data) => {
         }
     }, 100);
 });
-ipcRenderer.on('save-finished', (e, msg) => alert(msg));
-ipcRenderer.on('export-finished', (e, msg) => alert(msg));
+ipcRenderer.on('save-finished', (e, msg) => {
+    alert(msg);
+    setTimeout(() => window.focus(), 50);
+});
+
+ipcRenderer.on('export-finished', (e, msg) => {
+    alert(msg);
+    setTimeout(() => window.focus(), 50);
+});
 
 document.getElementById('calcBtn').addEventListener('click', runSimulation);
 dom.metric.addEventListener('change', runSimulation);
@@ -309,5 +344,60 @@ Utils.initResizer(document.getElementById('resizerLeft'), document.getElementByI
 Utils.initResizer(document.getElementById('resizerRight'), document.getElementById('rightSidebar'), 'right', Charts.resizeCharts);
 Utils.initResizer(document.getElementById('resizerVertical'), document.getElementById('analysisPanel'), 'vertical', Charts.resizeCharts);
 
+// ==========================================
+// [NEW] 4. Global Input Validation with Red Title
+// ==========================================
+// 모든 텍스트 입력창에서 포커스가 빠져나갈 때(blur/focusout) 수식을 검증하고
+// 오류 시 타이틀 텍스트를 빨갛게 변경합니다.
+
+document.body.addEventListener('focusout', (e) => {
+    const target = e.target;
+    
+    // 텍스트나 숫자 인풋만 대상 (컬러피커 등 제외)
+    if (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'number')) {
+        const val = target.value;
+        if (!val) return; // 빈 값은 패스
+
+        try {
+            // 간단한 문법 체크 (변수명은 모두 1로 치환해서 문법 오류만 잡음)
+            // ex: "10 + *" -> Syntax Error 발생
+            const testFormula = val.replace(/[a-zA-Z_]\w*/g, '1');
+            new Function('return ' + testFormula);
+        } catch (err) {
+            flashErrorOnLabel(target);
+        }
+    }
+});
+
+function flashErrorOnLabel(inputElement) {
+    // 1. 인풋 바로 위의 형제(previousSibling)가 라벨인지 확인
+    let label = inputElement.previousElementSibling;
+    
+    // 2. 아니면 부모의 첫번째 라벨을 찾음
+    if (!label || label.tagName !== 'LABEL') {
+        const parent = inputElement.parentElement;
+        if (parent) label = parent.querySelector('label');
+    }
+
+    if (label) {
+        // 원래 텍스트 저장 (data 속성 활용)
+        const originalText = label.getAttribute('data-original-text') || label.innerText;
+        if (!label.getAttribute('data-original-text')) {
+            label.setAttribute('data-original-text', originalText);
+        }
+
+        // 에러 표시
+        label.innerText = "⚠ ERR";
+        label.classList.add('label-error'); // components.css에 정의됨
+
+        // 2초 후 복구
+        setTimeout(() => {
+            label.innerText = originalText;
+            label.classList.remove('label-error');
+        }, 2000);
+    }
+}
+
+// 초기 실행
 refreshAll();
 runSimulation();

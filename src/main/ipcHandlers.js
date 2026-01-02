@@ -6,6 +6,16 @@ function registerHandlers(win) {
     ipcMain.on('max-app', () => win.isMaximized() ? win.unmaximize() : win.maximize());
     ipcMain.on('close-app', () => win.close());
 
+    ipcMain.on('force-focus', () => {
+        if (win) {
+            if (win.isMinimized()) win.restore();
+            win.setAlwaysOnTop(true);
+            win.show();
+            win.focus();
+            win.setAlwaysOnTop(false);
+        }
+    });
+
     ipcMain.on('save-kal', async (e, data) => {
         const msg = await saveKal(win, data);
         if(msg) e.reply('save-finished', msg);
