@@ -1,0 +1,32 @@
+.entity-card, .item-card {
+    background-color: #40444b; border: none; border-radius: 5px; padding: 10px; margin-bottom: 10px;
+    display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 0 rgba(4,4,5,0.2);
+}
+.item-card { border-left: 4px solid #d29922; }
+.entity-header, .item-header { display: flex; gap: 5px; align-items: center; justify-content: space-between; }
+.entity-stats-container, .item-stats-list {
+    background: #2f3136; padding: 8px; border-radius: 4px; display: flex; flex-direction: column; gap: 5px;
+}
+input[type="text"], input[type="number"], .dark-select {
+    width: 100%; padding: 6px; background-color: #202225; border: 1px solid #202225;
+    color: #dcddde; border-radius: 3px; font-size: 0.9em; box-sizing: border-box; outline: none;
+    transition: border-color 0.2s; /* 부드러운 전환 추가 */
+}
+input:focus { outline: 1px solid #00aff4; }
+input[type="color"] { background: none; border: none; width: 30px; height: 30px; cursor: pointer; padding: 0; }
+.btn {
+    width: 100%; padding: 10px; background-color: #5865f2; color: white; border: none;
+    border-radius: 3px; cursor: pointer; font-weight: bold; margin-top: 5px; transition: background 0.17s;
+}
+.btn:hover { background-color: #4752c4; }
+.delete-btn, .delete-item-btn, .remove-stat-btn { background: transparent; border: none; color: #ed4245; font-weight: bold; cursor: pointer; }
+.add-stat-btn { background: none; border: 1px dashed #72767d; color: #b9bbbe; font-size: 0.8em; width: 100%; cursor: pointer; padding: 4px; margin-top: 5px; }
+.add-stat-btn:hover { background: #40444b; color: white; }
+.resizer-vertical { height: 6px; width: 100%; background-color: #202225; cursor: row-resize; z-index: 10; }
+.resizer { width: 6px; background-color: #202225; cursor: col-resize; z-index: 10; }
+.resizer:hover, .resizer-vertical:hover, .resizer.active { background-color: #5865f2; }
+
+.label-error {
+    color: #ff4d4d !important;
+    transition: color 0.2s ease;
+}
