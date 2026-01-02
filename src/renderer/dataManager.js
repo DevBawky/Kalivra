@@ -11,7 +11,7 @@ let projectData = {
         entities: [],
         items: [],
         gameRules: {
-            stats: ['hp', 'atk', 'def', 'aspd', 'eva'],
+            stats: ['hp', 'atk', 'def', 'cric', 'crid', 'aspd', 'eva'],
             descriptions: {},
             dmgFormula: 'atk * (100 / (100 + def))',
             cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + eva * 2'

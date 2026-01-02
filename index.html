@@ -157,22 +157,57 @@
     </div>
 
     <div id="battleModal" class="modal">
-        <div class="modal-content battle-content">
+        <div class="modal-content battle-content" style="width: 1400px; max-width: 95vw;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <h3>Battle Simulator</h3>
                 <span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span>
             </div>
+
             <div class="battle-controls">
-                <div class="battle-control-group" style="flex:1;"><label style="color:#007acc;">Attacker</label><select id="battleEntA" class="dark-select"></select></div>
+                <div class="battle-control-group" style="flex:1;">
+                    <label style="color:#007acc;">Attacker</label>
+                    <select id="battleEntA" class="dark-select"></select>
+                </div>
                 <div style="align-self:end; padding-bottom:10px; font-weight:bold; color:#888;">VS</div>
-                <div class="battle-control-group" style="flex:1;"><label style="color:#ff5555;">Opponent</label><select id="battleEntB" class="dark-select"><option value="all">ALL (League)</option></select></div>
-                <div class="battle-control-group" style="width:80px;"><label>Level</label><input type="number" id="battleLevel" value="20"></div>
-                <div class="battle-control-group" style="width:80px;"><label>Count</label><input type="number" id="battleCount" value="100"></div>
+                <div class="battle-control-group" style="flex:1;">
+                    <label style="color:#ff5555;">Opponent</label>
+                    <select id="battleEntB" class="dark-select"><option value="all">ALL (League)</option></select>
+                </div>
+                <div class="battle-control-group" style="width:80px;">
+                    <label>Level</label>
+                    <input type="number" id="battleLevel" value="20">
+                </div>
+                <div class="battle-control-group" style="width:80px;">
+                    <label>Count</label>
+                    <input type="number" id="battleCount" value="100">
+                </div>
                 <button id="runBattleBtn" class="btn" style="width:auto; height:36px; background-color:#e74c3c;">FIGHT</button>
             </div>
-            <div class="battle-results-wrapper">
-                <div class="battle-chart-area"><h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & TTK</h4><div style="flex:1; position:relative; min-height: 200px;"><canvas id="battleResultChart"></canvas></div></div>
-                <div class="battle-log-area"><h4 style="margin:0 0 5px 0; color:#ccc;">Log</h4><div id="battleLog" class="log-container"><div class="placeholder">Select entities and press FIGHT</div></div></div>
+
+            <div class="battle-results-wrapper" style="display: flex; gap: 15px; height: 600px;">
+                
+                <div class="battle-chart-area">
+                    <h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & Avg Turns</h4>
+                    
+                    <div style="flex:1; position:relative; min-height: 200px;">
+                        <canvas id="battleResultChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="battle-log-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+                    <h4 style="margin:0 0 5px 0; color:#ccc;">Battle Log</h4>
+                    <div id="battleLog" class="log-container" style="flex: 1; overflow-y: auto;">
+                        <div class="placeholder">Select entities and press FIGHT</div>
+                    </div>
+                </div>
+
+                <div class="battle-stat-area" style="flex: 0.8; display: flex; flex-direction: column; min-width: 0; background-color: #2f3136; padding: 10px; border-radius: 8px;">
+                    <h4 style="margin:0 0 5px 0; color:#ccc;">Stats (Lv.<span id="statDisplayLevel">?</span>)</h4>
+                    <div id="battleStatList" style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                        <div class="placeholder" style="color:#666; font-size:0.9em;">Stats will appear here...</div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
