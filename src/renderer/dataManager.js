@@ -6,22 +6,19 @@ let projectData = {
         description: "",
         version: "1.0.0"
     },
-    snapshots: [], // { name, date, data: { entities, items, rules } }
+    snapshots: [], 
     current: {
         entities: [],
         items: [],
         gameRules: {
             stats: ['hp', 'atk', 'def', 'cric', 'crid', 'aspd', 'eva'],
             descriptions: {},
-            dmgFormula: 'atk * (100 / (100 + def))',
+            dmgFormula: 'a.atk * (100 / (100 + b.def))',
             cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + eva * 2'
         }
     }
 };
 
-// ==========================================
-// Command Pattern (기존 유지)
-// ==========================================
 class CommandManager {
     constructor() { this.undoStack = []; this.redoStack = []; }
     execute(command) { command.execute(); this.undoStack.push(command); this.redoStack = []; }
@@ -38,7 +35,7 @@ class DeleteItemCommand {
 const commandManager = new CommandManager();
 
 module.exports = {
-    // [Getter] 현재 작업중인 데이터 반환
+    // 현재 작업중인 데이터 반환
     getEntities: () => projectData.current.entities,
     getItems: () => projectData.current.items,
     getRules: () => projectData.current.gameRules,
@@ -49,7 +46,7 @@ module.exports = {
     
     getSnapshots: () => projectData.snapshots,
     
-    // 스냅샷 생성 (현재 상태 저장)
+    // 스냅샷 생성
     createSnapshot: (name) => {
         const snapshot = {
             id: Date.now(),
@@ -60,12 +57,10 @@ module.exports = {
         projectData.snapshots.push(snapshot);
     },
     
-    // 스냅샷 불러오기 (현재 상태 덮어쓰기)
+    // 스냅샷 불러오기
     loadSnapshot: (index) => {
         if (index >= 0 && index < projectData.snapshots.length) {
-            // 현재 상태 백업 후 로드? (Undo 지원하려면 복잡해지므로 일단 덮어쓰기)
             projectData.current = JSON.parse(JSON.stringify(projectData.snapshots[index].data));
-            // 로드 후 Undo 스택 초기화 권장
             commandManager.undoStack = [];
             commandManager.redoStack = [];
         }
@@ -75,24 +70,20 @@ module.exports = {
         projectData.snapshots.splice(index, 1);
     },
 
-    // [Load / Init] - 파일 로드 시 호출
+    // [Load / Init]
     loadProject: (data) => {
         if (data.meta && data.current) {
-            // 신규 구조 로드
             projectData = data;
         } else {
-            // 구버전 파일 호환성 (entities, items 등이 최상위에 있는 경우)
             projectData.current.entities = data.entities || [];
             projectData.current.items = data.items || [];
             projectData.current.gameRules = data.gameRules || projectData.current.gameRules;
-            projectData.snapshots = []; // 구버전은 스냅샷 없음
+            projectData.snapshots = [];
         }
     },
     
-    // [Save] - 파일 저장용 전체 데이터 반환
     getProjectData: () => projectData,
 
-    // [Setter] (기존 호환성 유지)
     setEntities: (data) => { projectData.current.entities = data || []; },
     setItems: (data) => { projectData.current.items = data || []; },
     setRules: (data) => { if(data) projectData.current.gameRules = data; },

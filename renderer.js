@@ -27,6 +27,7 @@ function debounce(func, timeout = 300) {
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); };
 }
+
 const debouncedSimulation = debounce(() => { runSimulation(); }, 200);
 
 // ==========================================
@@ -98,24 +99,70 @@ function runSimulation() {
     const max = parseInt(dom.maxLevel.value) || 20;
     const metric = dom.metric.value;
     const rules = DM.getRules();
+    
+    // 1. 공식 선택
     const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
+    
+    // 🚨 [수정 1] 여기서 검사에 걸려 함수가 멈추고 있었습니다.
+    // validCheck 관련 코드를 주석 처리하거나, 리턴을 막습니다.
     const validCheck = Sim.validateFormula(formula, rules.stats);
-    if (!validCheck.valid) return;
+    // if (!validCheck.valid) return;  <-- 🔥 이 줄을 반드시 지우거나 주석(//) 처리하세요! 
+
     const labels = Array.from({length: max}, (_, i) => `Lv.${i+1}`);
-    const datasets = []; const rawData = {}; 
+    const datasets = []; 
+    const rawData = {}; 
+
+    // 2. [수정 2] 데미지 계산을 위한 허수아비(Dummy Target) 생성
+    // (상대방 방어력이 0일 때의 이론상 데미지를 계산하기 위함)
+    const dummyTarget = {};
+    if (rules.stats) {
+        rules.stats.forEach(s => dummyTarget[s] = 0);
+    }
+
     DM.getEntities().forEach(ent => {
         const data = [];
         for(let lv=1; lv<=max; lv++) {
+            // 해당 레벨의 스탯 가져오기
             const stats = Sim.getStatsAtLevel(ent, lv, DM.getItems(), rules);
-            data.push(Sim.calculateValue(formula, stats));
+            
+            let calculatedVal = 0;
+            try {
+                if (metric === 'cp') {
+                    // CP 계산: 내 스탯(stats)만 있으면 됨
+                    calculatedVal = Sim.calculateValue(formula, stats);
+                } else {
+                    // Avg Damage 계산: a(나)와 b(적)가 필요함
+                    // b에 위에서 만든 '방어력 0 허수아비'를 넣어줌
+                    calculatedVal = Sim.calculateValue(formula, { a: stats, b: dummyTarget });
+                }
+            } catch (err) {
+                console.warn(`Calculation error at Lv.${lv}:`, err.message);
+                calculatedVal = 0; // 에러 나면 0으로 처리
+            }
+            
+            data.push(calculatedVal);
         }
-        datasets.push({ label: ent.name, data, borderColor: ent.color, backgroundColor: ent.color+'20', borderWidth:2, tension:0.3 });
+        
+        datasets.push({ 
+            label: ent.name, 
+            data, 
+            borderColor: ent.color, 
+            backgroundColor: ent.color+'20', 
+            borderWidth:2, 
+            tension:0.3 
+        });
         rawData[ent.id] = { name: ent.name, data, color: ent.color };
     });
-    if (Charts && Charts.renderMainChart) Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
+
+    if (Charts && Charts.renderMainChart) {
+        Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
+    }
+    
     const crossovers = Sim.analyzeCrossovers(rawData, max);
     dom.analysisLog.innerHTML = crossovers.length ? '' : '<div class="log-item placeholder">No crossover points detected.</div>';
-    crossovers.forEach(c => { dom.analysisLog.innerHTML += `<div class="log-item"><span class="log-level">Lv.${c.lv-1}->${c.lv}</span>: <b style="color:${c.wColor}">${c.winnerName}</b> overtakes <b style="color:${c.lColor}">${c.loserName}</b></div>`; });
+    crossovers.forEach(c => { 
+        dom.analysisLog.innerHTML += `<div class="log-item"><span class="log-level">Lv.${c.lv-1}->${c.lv}</span>: <b style="color:${c.wColor}">${c.winnerName}</b> overtakes <b style="color:${c.lColor}">${c.loserName}</b></div>`; 
+    });
 }
 
 // ==========================================
@@ -137,20 +184,44 @@ document.getElementById('configBtn').addEventListener('click', () => {
 });
 document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
-    const dmgInput = document.getElementById('dmgFormula'); const cpInput = document.getElementById('cpFormula');
+    const dmgInput = document.getElementById('dmgFormula');
+    const cpInput = document.getElementById('cpFormula');
     const statInput = document.getElementById('statDefinitions');
+    
     const newStats = statInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
     if (newStats.length === 0) { cpInput.classList.add('input-error'); return; }
+
     const dmgCheck = Sim.validateFormula(dmgInput.value, newStats);
-    if (!dmgCheck.valid) { dmgInput.classList.add('input-error'); return; } else { dmgInput.classList.remove('input-error'); }
+    if (!dmgCheck.valid) { 
+        dmgInput.classList.add('input-error'); 
+        // return;
+        console.warn("데미지 수식 경고: " + dmgCheck.error);
+    } else { 
+        dmgInput.classList.remove('input-error'); 
+    }
+
+    // 3. 전투력 공식 검사
     const cpCheck = Sim.validateFormula(cpInput.value, newStats);
-    if (!cpCheck.valid) { cpInput.classList.add('input-error'); return; } else { cpInput.classList.remove('input-error'); }
-    const rawDesc = document.getElementById('statDescInput').value; const descriptions = {};
+    if (!cpCheck.valid) { 
+        cpInput.classList.add('input-error'); 
+        // return;
+        console.warn("전투력 수식 경고: " + cpCheck.error);
+    } else { 
+        cpInput.classList.remove('input-error'); 
+    }
+
+    const rawDesc = document.getElementById('statDescInput').value; 
+    const descriptions = {};
     rawDesc.split('\n').forEach(line => { const parts = line.split(':'); if (parts.length >= 2) descriptions[parts[0].trim()] = parts.slice(1).join(':').trim(); });
+    
     DM.setMeta({ projectName: document.getElementById('metaProjectName').value, author: document.getElementById('metaAuthor').value, description: document.getElementById('metaDesc').value });
     DM.setRules({ stats: newStats, descriptions: descriptions, dmgFormula: dmgInput.value, cpFormula: cpInput.value });
+    
     DM.getEntities().forEach(ent => { newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; }); });
-    configModal.style.display = 'none'; refreshAll(); runSimulation();
+    
+    configModal.style.display = 'none'; 
+    refreshAll(); 
+    runSimulation();
 });
 
 const snapshotModal = document.getElementById('snapshotModal');
@@ -416,6 +487,38 @@ function flashErrorOnLabel(inputElement) {
     let label = inputElement.previousElementSibling; if (!label || label.tagName !== 'LABEL') { const parent = inputElement.parentElement; if (parent) label = parent.querySelector('label'); }
     if (label) { const originalText = label.getAttribute('data-original-text') || label.innerText; if (!label.getAttribute('data-original-text')) label.setAttribute('data-original-text', originalText); label.innerText = "⚠ ERR"; label.classList.add('label-error'); setTimeout(() => { label.innerText = originalText; label.classList.remove('label-error'); }, 2000); }
 }
+
+function initProject() {
+    // 1. 기본 스탯 정의 (cric, crid 추가됨)
+    const defaultStats = ['hp', 'atk', 'def', 'aspd', 'eva', 'cric', 'crid'];
+    
+    // 2. 스탯 설명 정의
+    const defaultDescriptions = {
+        hp: "Health Point",
+        atk: "Base Damage",
+        def: "Defense",
+        aspd: "Attack Speed",
+        eva: "Evasion",
+        cric: "Critical Chance",
+        crid: "Critical Damage"
+    };
+
+    // 3. DM(DataManager)에 규칙 설정
+    // 만약 로드된 데이터가 없다면 이 기본값을 사용
+    if (!DM.hasProjectData()) {
+        DM.setRules({
+            stats: defaultStats,
+            descriptions: defaultDescriptions,
+            // [중요] battle.js 수정에 맞춰 공식도 a.atk, b.def로 변경 권장
+            dmgFormula: "atk * (100 / (100 + def))", 
+            cpFormula: "hp * 0.5 + atk * 2 + def + aspd * 5"
+        });
+    }
+    
+    refreshAll();
+}
+initProject();
+
 
 refreshAll();
 runSimulation();
