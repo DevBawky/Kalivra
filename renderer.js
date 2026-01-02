@@ -273,6 +273,11 @@ function runDetailAnalysis(idA, idB, lv) {
     
     document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
 
+    const titleEl = document.getElementById('detailTitle');
+    if (titleEl) {
+        titleEl.innerText = `${entA.name} vs ${entB.name}`;
+    }
+
     setTimeout(() => {
         const startTime = performance.now();
         const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules().dmgFormula);
