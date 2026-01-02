@@ -36,7 +36,6 @@ class PropertyChangeCommand {
     execute() { this.target[this.key] = this.newVal; if(this.callback) this.callback(); }
     undo() { this.target[this.key] = this.oldVal; if(this.callback) this.callback(); }
 }
-
 class StatChangeCommand {
     constructor(statObj, type, oldVal, newVal, callback) {
         this.statObj = statObj; this.type = type; this.oldVal = oldVal; this.newVal = newVal; this.callback = callback;
@@ -44,7 +43,6 @@ class StatChangeCommand {
     execute() { this.statObj[this.type] = this.newVal; if(this.callback) this.callback(); }
     undo() { this.statObj[this.type] = this.oldVal; if(this.callback) this.callback(); }
 }
-
 class ItemModChangeCommand {
     constructor(modifier, key, oldVal, newVal, callback) {
         this.modifier = modifier; this.key = key; this.oldVal = oldVal; this.newVal = newVal; this.callback = callback;
@@ -52,7 +50,6 @@ class ItemModChangeCommand {
     execute() { this.modifier[this.key] = this.newVal; if(this.callback) this.callback(); }
     undo() { this.modifier[this.key] = this.oldVal; if(this.callback) this.callback(); }
 }
-
 class AddItemModCommand {
     constructor(item, modData, callback) {
         this.item = item; this.modData = modData; this.callback = callback;
@@ -60,7 +57,6 @@ class AddItemModCommand {
     execute() { this.item.modifiers.push(this.modData); if(this.callback) this.callback(); }
     undo() { this.item.modifiers.pop(); if(this.callback) this.callback(); }
 }
-
 class RemoveItemModCommand {
     constructor(item, index, callback) {
         this.item = item; this.index = index; this.removedMod = null; this.callback = callback;
@@ -75,49 +71,33 @@ class RemoveItemModCommand {
         if(this.callback) this.callback(); 
     }
 }
-
 class RemoveEntityCommand {
     constructor(index) { this.index = index; this.removedData = null; }
     execute() { this.removedData = DM.getEntities()[this.index]; DM.removeEntity(this.index); refreshAll(); runSimulation(); }
     undo() { DM.getEntities().splice(this.index, 0, this.removedData); refreshAll(); runSimulation(); }
 }
-
 class AddEntityCommand {
     constructor(entityData) { this.entityData = entityData; }
     execute() { DM.addEntity(this.entityData); refreshAll(); runSimulation(); }
     undo() { DM.removeEntity(DM.getEntities().length - 1); refreshAll(); runSimulation(); }
 }
-
 class RemoveItemCommand {
     constructor(index) { this.index = index; this.removedData = null; }
     execute() { this.removedData = DM.getItems()[this.index]; DM.getItems().splice(this.index, 1); refreshAll(); runSimulation(); }
     undo() { DM.getItems().splice(this.index, 0, this.removedData); refreshAll(); runSimulation(); }
 }
-
 class AddItemCommand {
     constructor(itemData) { this.itemData = itemData; }
     execute() { DM.addItem(this.itemData); refreshAll(); runSimulation(); }
     undo() { DM.getItems().pop(); refreshAll(); runSimulation(); }
 }
 
-// 단축키 설정
 document.addEventListener('keydown', (e) => {
-    // Undo (Ctrl+Z)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (undoStack.length > 0) {
-            const cmd = undoStack.pop();
-            cmd.undo();
-            redoStack.push(cmd);
-            // 커맨드 내부 콜백에서 refreshAll()을 호출하므로 여기서는 추가 호출 불필요
-        }
+        if (undoStack.length > 0) { const cmd = undoStack.pop(); cmd.undo(); redoStack.push(cmd); }
     }
-    // Redo (Ctrl+Y)
     if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        if (redoStack.length > 0) {
-            const cmd = redoStack.pop();
-            cmd.execute();
-            undoStack.push(cmd);
-        }
+        if (redoStack.length > 0) { const cmd = redoStack.pop(); cmd.execute(); undoStack.push(cmd); }
     }
 });
 
@@ -128,26 +108,14 @@ function refreshAll() {
     dom.entCont.innerHTML = '';
     dom.itemCont.innerHTML = '';
     
-    // 화면 갱신 함수 (커맨드 콜백용)
-    // Undo/Redo 시 화면도 다시 그리고 그래프도 다시 그려야 함
-    const updateUI = () => {
-        refreshAll();
-        runSimulation();
-    };
+    const updateUI = () => { refreshAll(); runSimulation(); };
 
     // Entities
     DM.getEntities().forEach((ent, idx) => {
         UI.renderEntityCard(ent, idx, dom.entCont, {
-            // 입력 중일 때는 그래프만 갱신 (화면 깜빡임 방지)
             onInput: () => runSimulation(),
-            
-            // [중요 수정] Commit 시에는 updateUI를 호출하여 refreshAll() 수행
-            onCommit: (key, oldVal, newVal) => {
-                if (oldVal !== newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI));
-            },
-            onStatCommit: (statObj, type, oldVal, newVal) => {
-                if (oldVal !== newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI));
-            },
+            onCommit: (key, oldVal, newVal) => { if (oldVal !== newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI)); },
+            onStatCommit: (statObj, type, oldVal, newVal) => { if (oldVal !== newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI)); },
             onLock: () => { ent.isLocked = !ent.isLocked; refreshAll(); },
             onDelete: (i) => executeCommand(new RemoveEntityCommand(i))
         });
@@ -159,25 +127,11 @@ function refreshAll() {
             onChange: () => runSimulation(),
             onInput: () => runSimulation(),
             onUpdate: updateUI,
-            
-            // [중요 수정] 아이템 관련 커밋들도 모두 updateUI 사용
-            onNameCommit: (oldVal, newVal) => {
-                if(oldVal !== newVal) executeCommand(new PropertyChangeCommand(item, 'name', oldVal, newVal, updateUI));
-            },
+            onNameCommit: (oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new PropertyChangeCommand(item, 'name', oldVal, newVal, updateUI)); },
             onDelete: (i) => executeCommand(new RemoveItemCommand(i)),
-            
-            onModAdd: () => {
-                const newMod = {stat: DM.getRules().stats[0], op:'add', val:0};
-                executeCommand(new AddItemModCommand(item, newMod, updateUI));
-            },
-            onModDelete: (modIdx) => {
-                executeCommand(new RemoveItemModCommand(item, modIdx, updateUI));
-            },
-            onModCommit: (mod, key, oldVal, newVal) => {
-                if(oldVal !== newVal) {
-                    executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI));
-                }
-            }
+            onModAdd: () => { const newMod = {stat: DM.getRules().stats[0], op:'add', val:0}; executeCommand(new AddItemModCommand(item, newMod, updateUI)); },
+            onModDelete: (modIdx) => { executeCommand(new RemoveItemModCommand(item, modIdx, updateUI)); },
+            onModCommit: (mod, key, oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI)); }
         });
     });
 }
@@ -203,7 +157,6 @@ function runSimulation() {
 
     Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
     
-    // Crossover Analysis
     const crossovers = Sim.analyzeCrossovers(rawData, max);
     dom.analysisLog.innerHTML = crossovers.length ? '' : '<div class="log-item placeholder">No crossover points detected.</div>';
     crossovers.forEach(c => {
@@ -211,21 +164,58 @@ function runSimulation() {
     });
 }
 
-// ... (아래 Config Modal, Event Listeners 등은 기존과 동일) ...
+// [Config Modal & Descriptions]
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
     const rules = DM.getRules();
     document.getElementById('dmgFormula').value = rules.dmgFormula;
     document.getElementById('cpFormula').value = rules.cpFormula;
-    document.getElementById('statDefinitions').value = rules.stats.join(',');
+    document.getElementById('statDefinitions').value = rules.stats.join(', ');
+    
+    // 설명 데이터를 텍스트로 변환하여 표시 (예: "hp: 체력\natk: 공격력")
+    let descText = "";
+    if (rules.descriptions) {
+        descText = Object.entries(rules.descriptions).map(([k, v]) => `${k}: ${v}`).join('\n');
+    }
+    document.getElementById('statDescInput').value = descText;
+    
     configModal.style.display = 'block';
 });
 document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
+
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
-    const newStats = document.getElementById('statDefinitions').value.split(',').map(s=>s.trim()).filter(s=>s);
-    DM.setRules({ stats: newStats, dmgFormula: document.getElementById('dmgFormula').value, cpFormula: document.getElementById('cpFormula').value });
+    // 스탯 정의 파싱
+    const rawStats = document.getElementById('statDefinitions').value;
+    const newStats = rawStats.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    
+    // [추가] 설명 데이터 파싱 (줄바꿈 및 콜론으로 분리)
+    const rawDesc = document.getElementById('statDescInput').value;
+    const descriptions = {};
+    rawDesc.split('\n').forEach(line => {
+        const parts = line.split(':');
+        if (parts.length >= 2) {
+            const key = parts[0].trim();
+            const val = parts.slice(1).join(':').trim(); // 콜론이 내용에 있을 경우 대비
+            if(key) descriptions[key] = val;
+        }
+    });
+
+    if (newStats.length === 0) { alert("At least one stat is required!"); return; }
+
+    DM.setRules({
+        stats: newStats,
+        descriptions: descriptions, // 저장
+        dmgFormula: document.getElementById('dmgFormula').value,
+        cpFormula: document.getElementById('cpFormula').value
+    });
+
+    DM.getEntities().forEach(ent => {
+        newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; });
+    });
+
     configModal.style.display = 'none';
-    refreshAll(); runSimulation();
+    refreshAll(); 
+    runSimulation();
 });
 
 document.getElementById('addBtn').addEventListener('click', () => {
@@ -257,14 +247,10 @@ ipcRenderer.on('load-finished', (e, data) => {
     refreshAll(); runSimulation();
     alert('Project Loaded!');
 });
-
 ipcRenderer.on('save-finished', (e, msg) => alert(msg));
 ipcRenderer.on('export-finished', (e, msg) => alert(msg));
 
-document.getElementById('saveBtn').addEventListener('click', () => {
-    ipcRenderer.send('save-kal', { maxLevel: dom.maxLevel.value, entities: DM.getEntities(), items: DM.getItems(), gameRules: DM.getRules() });
-});
-
+document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', { maxLevel: dom.maxLevel.value, entities: DM.getEntities(), items: DM.getItems(), gameRules: DM.getRules() }));
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
 document.getElementById('exportBtn').addEventListener('click', () => {
     let csv = "Level," + DM.getEntities().map(e=>e.name).join(',') + "\n";
@@ -304,5 +290,4 @@ Utils.initResizer(document.getElementById('resizerLeft'), document.getElementByI
 Utils.initResizer(document.getElementById('resizerRight'), document.getElementById('rightSidebar'), 'right', Charts.resizeCharts);
 Utils.initResizer(document.getElementById('resizerVertical'), document.getElementById('analysisPanel'), 'vertical', Charts.resizeCharts);
 
-refreshAll();
-runSimulation();
+refreshAll(); runSimulation();

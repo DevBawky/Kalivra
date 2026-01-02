@@ -7,12 +7,49 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/modules.css">
+
+    <style>
+        /* 상단 툴바 레이아웃 */
+        .top-toolbar {
+            display: flex; align-items: center; gap: 15px; height: 40px;
+            background-color: #252526; border-bottom: 1px solid #3e3e42;
+            padding: 0 15px; box-sizing: border-box; user-select: none;
+        }
+        .toolbar-group { display: flex; gap: 8px; }
+        .toolbar-divider { width: 1px; height: 20px; background-color: #454545; margin: 0 5px; }
+
+        /* 툴바 버튼 스타일 */
+        .tool-btn {
+            display: flex; align-items: center; justify-content: center;
+            height: 28px; padding: 0 12px;
+            border: 1px solid transparent; border-radius: 4px;
+            background-color: transparent; color: #cccccc;
+            font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .tool-btn:hover { background-color: #3e3e42; color: white; border: 1px solid #555; }
+        .tool-btn:active { background-color: #2d2d30; transform: translateY(1px); }
+        .tool-btn.primary { color: #5fabff; font-weight: bold; }
+        .tool-btn.warning { color: #d29922; }
+        .tool-btn.success { color: #2da44e; }
+        .tool-btn.secondary { color: #b9bbbe; }
+        .tool-btn span { margin-right: 6px; }
+
+        /* [추가] 스탯 설명 입력창 스타일 */
+        .desc-input {
+            width: 100%; height: 80px; 
+            background-color: #1e1e1e; border: 1px solid #3e3e42; 
+            color: #ccc; padding: 8px; font-family: monospace; resize: vertical;
+        }
+        
+        /* [추가] 스탯 라벨 호버 효과 */
+        .stat-label-text {
+            cursor: help; text-decoration: underline dotted #666;
+        }
+    </style>
 </head>
 <body>
     <div class="custom-title-bar">
-        <div class="title-drag-area">
-            <span class="app-title">Kalivra</span>
-        </div>
+        <div class="title-drag-area"><span class="app-title">Kalivra</span></div>
         <div class="window-controls">
             <button id="minBtn" class="win-btn" title="Minimize">─</button>
             <button id="maxBtn" class="win-btn" title="Maximize">◻</button>
@@ -22,23 +59,13 @@
 
     <div class="top-toolbar">
         <div class="toolbar-group">
-            <button id="calcBtn" class="tool-btn primary">
-                <span>▶</span>
-            </button>
-            <button id="exportBtn" class="tool-btn warning">
-                <span>📄</span>
-            </button>
+            <button id="calcBtn" class="tool-btn primary"><span>▶</span> Run Simulation</button>
+            <button id="exportBtn" class="tool-btn warning"><span>📄</span> Export CSV</button>
         </div>
-        
         <div class="toolbar-divider"></div>
-        
         <div class="toolbar-group">
-            <button id="saveBtn" class="tool-btn success">
-                <span>💾</span>
-            </button>
-            <button id="loadBtn" class="tool-btn secondary">
-                <span>📂</span>
-            </button>
+            <button id="saveBtn" class="tool-btn success"><span>💾</span> Save</button>
+            <button id="loadBtn" class="tool-btn secondary"><span>📂</span> Load</button>
         </div>
     </div>
 
@@ -60,8 +87,7 @@
             </div>
             
             <div id="entityContainer"></div>
-
-            </div>
+        </div>
 
         <div class="resizer" id="resizerLeft"></div>
 
@@ -73,13 +99,10 @@
                     <option value="dmg">Avg Damage</option>
                 </select>
             </div>
-            
             <div class="chart-container" id="chartPanel">
                 <canvas id="balanceChart"></canvas>
             </div>
-            
             <div class="resizer-vertical" id="resizerVertical"></div>
-            
             <div class="analysis-panel" id="analysisPanel">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h3 style="margin:0; border:none;">Balance Analysis</h3>
@@ -98,9 +121,7 @@
                 <h2>Item / Buffs</h2>
                 <button id="addItemBtn" style="padding: 4px 10px; background-color:#d29922; border:none; border-radius:4px; color:white; cursor:pointer;">+ New</button>
             </div>
-
             <div id="itemContainer"></div>
-            
             <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #3e3e42; color: #888; font-size: 0.8em;">
                 * Items apply to checked entities.
             </div>
@@ -125,9 +146,14 @@
             </div>
             
             <div class="config-section">
-                <label>Define Stats</label>
-                <input type="text" id="statDefinitions">
-                <p style="font-size:0.8em; color:#888;">* 'eva' is used for dodge chance (0-100%).</p>
+                <label>Define Stats (Comma Separated)</label>
+                <input type="text" id="statDefinitions" placeholder="e.g. hp, atk, def">
+            </div>
+
+            <div class="config-section">
+                <label>Stat Descriptions (Format: stat: description)</label>
+                <textarea id="statDescInput" class="desc-input" placeholder="hp: Health Point&#10;atk: Attack Damage&#10;def: Defense"></textarea>
+                <p style="font-size:0.8em; color:#888;">* One description per line. Shows on hover.</p>
             </div>
     
             <button class="btn" id="applyConfigBtn">Apply Rules</button>
