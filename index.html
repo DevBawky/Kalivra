@@ -8,16 +8,61 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/modules.css">
     <style>
-        /* [중요] 차트가 안 보이는 문제 해결을 위해 높이 지정 */
         .chart-container {
             position: relative;
             flex: 1;
-            min-height: 0; /* Flexbox 내에서 캔버스 크기 문제 방지 */
+            min-height: 0; 
             width: 100%;
             background-color: #202225;
         }
+        
+        /* [NEW] 모달 중앙 정렬 */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; top: 0;
+            width: 100%; height: 100%; 
+            overflow: hidden; 
+            background-color: rgba(0,0,0,0.6); 
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background-color: #2f3136;
+            padding: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            max-height: 95vh;
+            overflow-y: auto;
+        }
 
-        /* (이하 기존 스타일 유지) */
+        /* [NEW] 리그 매트릭스 스타일 */
+        .matrix-container {
+            display: grid;
+            gap: 2px;
+            background-color: #111;
+            border: 1px solid #444;
+            overflow: auto;
+            max-height: 600px;
+        }
+        .matrix-cell {
+            display: flex; justify-content: center; align-items: center;
+            font-size: 0.8em; color: #fff; cursor: pointer;
+            transition: opacity 0.2s;
+            position: relative;
+        }
+        .matrix-cell:hover { opacity: 0.8; z-index: 10; border: 1px solid #fff; }
+        .matrix-header {
+            background-color: #202225; font-weight: bold; color: #ccc;
+            display: flex; justify-content: center; align-items: center;
+            padding: 5px; text-align: center;
+            position: sticky; z-index: 5;
+        }
+        .matrix-row-header { left: 0; }
+        .matrix-col-header { top: 0; }
+
+        /* (이하 기존 스타일) */
         .top-toolbar { display: flex; align-items: center; gap: 15px; height: 40px; background-color: #252526; border-bottom: 1px solid #3e3e42; padding: 0 15px; box-sizing: border-box; user-select: none; }
         .toolbar-group { display: flex; gap: 8px; }
         .toolbar-divider { width: 1px; height: 20px; background-color: #454545; margin: 0 5px; }
@@ -103,7 +148,10 @@
             <div class="analysis-panel" id="analysisPanel">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h3 style="margin:0; border:none;">Balance Analysis</h3>
-                    <button id="openBattleBtn" class="btn" style="width:auto; padding:4px 12px; font-size:0.8em; background-color:#d29922;">Battle Sim</button>
+                    <div style="display:flex; gap:5px;">
+                        <button id="openLeagueBtn" class="btn" style="width:auto; padding:4px 12px; font-size:0.8em; background-color:#5fabff;">League</button>
+                        <button id="openBattleBtn" class="btn" style="width:auto; padding:4px 12px; font-size:0.8em; background-color:#d29922;">Battle Sim</button>
+                    </div>
                 </div>
                 <div id="analysisLog" class="log-container">
                     <div class="log-item placeholder">Run simulation to see analysis...</div>
@@ -126,7 +174,7 @@
     </div>
 
     <div id="configModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 800px; max-width: 95vw;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3>Game Rules & Info</h3><span class="close-modal">&times;</span></div>
             <div class="config-section" style="background:#252526; padding:10px; border-radius:4px; margin-bottom:15px;">
                 <label style="color:#5fabff;">Project Meta Info</label>
@@ -181,6 +229,7 @@
                     <label>Count</label>
                     <input type="number" id="battleCount" value="100">
                 </div>
+                <button id="btnDetail" class="btn" style="width:auto; height:36px; background-color:#5fabff; margin-right:5px;">M.C</button>
                 <button id="runBattleBtn" class="btn" style="width:auto; height:36px; background-color:#e74c3c;">FIGHT</button>
             </div>
 
@@ -188,7 +237,6 @@
                 
                 <div class="battle-chart-area">
                     <h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & Avg Turns</h4>
-                    
                     <div style="flex:1; position:relative; min-height: 200px;">
                         <canvas id="battleResultChart"></canvas>
                     </div>
@@ -207,7 +255,61 @@
                         <div class="placeholder" style="color:#666; font-size:0.9em;">Stats will appear here...</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
 
+    <div id="detailModal" class="modal">
+        <div class="modal-content" style="width: 1300px; max-width: 95vw;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3>Detailed Analysis</h3>
+                <span class="close-detail" style="font-size:2em; cursor:pointer;">&times;</span>
+            </div>
+            <div style="display:flex; gap:20px; height:400px;">
+                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;">
+                    <h4 style="text-align:center; color:#ccc; margin:5px 0;">Turn Distribution (소요 턴)</h4>
+                    <div style="position:relative; height:350px;">
+                        <canvas id="detailTurnChart"></canvas>
+                    </div>
+                </div>
+                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;">
+                    <h4 style="text-align:center; color:#ccc; margin:5px 0;">Winning HP Distribution (승리 시 잔여 체력)</h4>
+                    <div style="position:relative; height:350px;">
+                        <canvas id="detailHpChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="detailStats" style="margin-top:15px; padding:10px; background:#2f3136; border-radius:4px; color:#ddd; font-family:monospace;">
+                Waiting for data...
+            </div>
+        </div>
+    </div>
+
+    <div id="leagueModal" class="modal">
+        <div class="modal-content" style="width: 1200px; max-width: 95vw; height: 90vh; display: flex; flex-direction: column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="display:flex; gap:15px; align-items:center;">
+                    <h3>League Matchup Matrix</h3>
+                    <div style="display:flex; align-items:center; gap:5px; font-size:0.9em;">
+                        <label>Level:</label>
+                        <input type="number" id="leagueLevel" value="20" style="width:50px; padding:3px; background:#111; border:1px solid #444; color:#fff;">
+                        <button id="runLeagueBtn" class="btn" style="width:auto; padding:3px 10px; font-size:0.9em; background-color:#2da44e;">Run League</button>
+                    </div>
+                </div>
+                <span class="close-league" style="font-size:2em; cursor:pointer;">&times;</span>
+            </div>
+            
+            <div id="leagueContainer" style="flex:1; position:relative; background:#000; overflow:hidden; display:flex; justify-content:center; align-items:center;">
+                <div style="color:#666;">Press 'Run League' to generate matrix.</div>
+            </div>
+            
+            <div style="margin-top:10px; font-size:0.8em; color:#888; display:flex; justify-content:space-between;">
+                <div>* Rows: Attacker / Cols: Defender</div>
+                <div style="display:flex; gap:10px;">
+                    <span style="color:#e74c3c">■ < 40%</span>
+                    <span style="color:#d29922">■ 40~60%</span>
+                    <span style="color:#2da44e">■ > 60%</span>
+                </div>
             </div>
         </div>
     </div>
