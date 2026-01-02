@@ -103,17 +103,13 @@ function runSimulation() {
     // 1. 공식 선택
     const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
     
-    // 🚨 [수정 1] 여기서 검사에 걸려 함수가 멈추고 있었습니다.
-    // validCheck 관련 코드를 주석 처리하거나, 리턴을 막습니다.
     const validCheck = Sim.validateFormula(formula, rules.stats);
-    // if (!validCheck.valid) return;  <-- 🔥 이 줄을 반드시 지우거나 주석(//) 처리하세요! 
+    // if (!validCheck.valid) return;
 
     const labels = Array.from({length: max}, (_, i) => `Lv.${i+1}`);
     const datasets = []; 
     const rawData = {}; 
 
-    // 2. [수정 2] 데미지 계산을 위한 허수아비(Dummy Target) 생성
-    // (상대방 방어력이 0일 때의 이론상 데미지를 계산하기 위함)
     const dummyTarget = {};
     if (rules.stats) {
         rules.stats.forEach(s => dummyTarget[s] = 0);
@@ -128,16 +124,13 @@ function runSimulation() {
             let calculatedVal = 0;
             try {
                 if (metric === 'cp') {
-                    // CP 계산: 내 스탯(stats)만 있으면 됨
                     calculatedVal = Sim.calculateValue(formula, stats);
                 } else {
-                    // Avg Damage 계산: a(나)와 b(적)가 필요함
-                    // b에 위에서 만든 '방어력 0 허수아비'를 넣어줌
                     calculatedVal = Sim.calculateValue(formula, { a: stats, b: dummyTarget });
                 }
             } catch (err) {
                 console.warn(`Calculation error at Lv.${lv}:`, err.message);
-                calculatedVal = 0; // 에러 나면 0으로 처리
+                calculatedVal = 0;
             }
             
             data.push(calculatedVal);
@@ -166,7 +159,7 @@ function runSimulation() {
 }
 
 // ==========================================
-// 3. Config, Snapshots (기존 유지)
+// 3. Config, Snapshots
 // ==========================================
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
@@ -256,7 +249,7 @@ ipcRenderer.on('export-finished', (e, msg) => alert(msg));
 document.getElementById('calcBtn').addEventListener('click', runSimulation);
 dom.metric.addEventListener('change', runSimulation);
 document.getElementById('addBtn').addEventListener('click', () => { const color = '#' + Math.floor(Math.random()*16777215).toString(16); executeCommand(new AddEntityCommand({ id: Date.now(), name: 'New Unit', color, stats:{}, variance:0, isLocked: false })); });
-document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }] })); });
+document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }], traits: [] })); });
 ['min','max','close'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
 document.body.addEventListener('focusout', (e) => {
     const target = e.target;
@@ -290,8 +283,18 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
     
     if (!entA) return alert("Select Attacker!");
     
+    // 1. 기본 스탯 계산
     let statsA;
     try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return alert("Error statsA: " + e.message); }
+
+    // ▼ [추가/수정] A의 특성(Traits) 병합하기 (본인 특성 + 착용 아이템 특성)
+    const activeItemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
+    const itemTraitsA = activeItemsA.flatMap(i => i.traits || []);
+    // 원본 훼손 방지를 위해 새로운 객체 생성
+    const battleEntA = { 
+        ...entA, 
+        traits: [...(entA.traits || []), ...itemTraitsA] 
+    };
 
     const results = [];
     const idB = document.getElementById('battleEntB').value;
@@ -311,9 +314,17 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
             targets.forEach(entB => {
                 const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
                 
-                // battle.js가 이제 allLogs 배열을 반환함
+                // ▼ [추가/수정] B도 똑같이 특성 병합
+                const activeItemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
+                const itemTraitsB = activeItemsB.flatMap(i => i.traits || []);
+                const battleEntB = { 
+                    ...entB, 
+                    traits: [...(entB.traits || []), ...itemTraitsB] 
+                };
+
+                // ▼ 수정된 battleEntA, battleEntB를 전달
                 const batchResult = Battle.runBattleBatch(
-                    entA, statsA, entB, statsB, 
+                    battleEntA, statsA, battleEntB, statsB, 
                     parseInt(document.getElementById('battleCount').value), 
                     DM.getRules().dmgFormula
                 );
@@ -322,6 +333,7 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
                 allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
             });
 
+            // (이하 차트/로그 렌더링 코드는 동일)
             Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results);
             renderBattleLog(allBattleResults, entA.name);
             document.getElementById('statDisplayLevel').innerText = lv;
