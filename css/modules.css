@@ -20,3 +20,109 @@
 .battle-results-wrapper { display: flex; gap: 20px; flex: 1; min-height: 0; }
 .battle-chart-area { flex: 1; background: #2f3136; padding: 15px; border-radius: 8px; display: flex; flex-direction: column; }
 .battle-log-area { flex: 1; display: flex; flex-direction: column; }
+
+.log-turn-divider {
+    background-color: #202225;
+    color: #96989d;
+    font-size: 0.8em;
+    text-align: center;
+    padding: 4px 0;
+    margin: 10px 0 5px 0;
+    border-radius: 4px;
+    border-top: 1px solid #3e3e42;
+    border-bottom: 1px solid #3e3e42;
+    font-weight: bold;
+}
+
+.log-item-detail {
+    padding: 3px 5px;
+    font-size: 0.9em;
+    border-bottom: 1px solid #2f3136;
+    line-height: 1.4;
+}
+
+.log-actor-hero { color: #5fabff; font-weight: bold; } /* 주인공 (파랑) */
+.log-actor-enemy { color: #ff5555; font-weight: bold; } /* 적 (빨강) */
+.log-target { color: #ccc; }
+.log-val-dmg { color: #e74c3c; font-weight: bold; }
+.log-val-heal { color: #2da44e; font-weight: bold; }
+.log-footer {
+    text-align: center;
+    padding: 10px;
+    color: #666;
+    font-style: italic;
+    font-size: 0.8em;
+}
+
+.log-group {
+    border: 1px solid #3e3e42;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    background-color: #202225;
+    overflow: hidden;
+}
+
+.log-header {
+    padding: 8px 10px;
+    background-color: #2f3136;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    font-weight: bold;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.log-header:hover { background-color: #40444b; }
+
+.log-header .win-tag {
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: white;
+}
+.tag-win { background-color: #2da44e; }
+.tag-lose { background-color: #ed4245; }
+
+.log-content {
+    display: none; /* 기본 숨김 */
+    padding: 10px;
+    border-top: 1px solid #3e3e42;
+    background-color: #18191c;
+}
+
+.log-content.open { display: block; } /* 열림 클래스 */
+
+/* [NEW] Battle Stat Panel */
+.stat-card {
+    background-color: #202225;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    border-left: 3px solid #72767d;
+}
+
+.stat-card-header {
+    font-weight: bold;
+    color: #eee;
+    margin-bottom: 5px;
+    font-size: 1em;
+    border-bottom: 1px solid #3e3e42;
+    padding-bottom: 3px;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+    font-size: 0.85em;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+}
+.stat-name { color: #b9bbbe; }
+.stat-val { color: #fee75c; font-weight: bold; }
