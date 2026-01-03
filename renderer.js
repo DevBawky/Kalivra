@@ -128,8 +128,15 @@ const dom = {
     metric: document.getElementById('graphMetric'),
     battleLog: document.getElementById('battleLog'),
     battleStatList: document.getElementById('battleStatList'),
-    analysisLog: document.getElementById('analysisLog')
+    analysisLog: document.getElementById('analysisLog'),
+    // [NEW] Bulk Edit DOM
+    bulkModal: document.getElementById('bulkModal'),
+    gridCont: document.getElementById('gridContainer'),
+    selCount: document.getElementById('selectedCount')
 };
+
+// [NEW] Bulk Edit State
+let selectedEntityIds = [];
 
 const detailModal = document.getElementById('detailModal');
 const btnDetail = document.getElementById('btnDetail');
@@ -145,10 +152,33 @@ const closeItemSet = document.querySelector('.close-itemset');
 const saveItemSetBtn = document.getElementById('saveItemSetBtn');
 const itemSetList = document.getElementById('itemSetList');
 
+function forceRestoreFocus() {
+    window.focus();
+    
+    if (document.activeElement) {
+        document.activeElement.blur();
+    }
+    
+    setTimeout(() => {
+        ipcRenderer.send('force-focus');
+        window.focus();
+    }, 50);
+}
+
 const originalAlert = window.alert;
-window.alert = function(message) { originalAlert(message); ipcRenderer.send('force-focus'); };
+window.alert = function(message) {
+    setTimeout(() => {
+        originalAlert(message);
+        forceRestoreFocus();
+    }, 10);
+};
+
 const originalConfirm = window.confirm;
-window.confirm = function(message) { const result = originalConfirm(message); ipcRenderer.send('force-focus'); return result; };
+window.confirm = function(message) {
+    const result = originalConfirm(message);
+    forceRestoreFocus();
+    return result;
+};
 
 function debounce(func, timeout = 300) {
     let timer;
@@ -156,7 +186,6 @@ function debounce(func, timeout = 300) {
 }
 const debouncedSimulation = debounce(() => { runSimulation(); }, 200);
 
-// ... (Undo/Redo System 유지) ...
 const undoStack = []; const redoStack = [];
 function executeCommand(command) { command.execute(); undoStack.push(command); redoStack.length = 0; }
 class PropertyChangeCommand { constructor(t,k,o,n,cb){this.t=t;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.t[this.k]=this.n;if(this.cb)this.cb();} undo(){this.t[this.k]=this.o;if(this.cb)this.cb();} }
@@ -182,7 +211,6 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { if (redoStack.length > 0) { const cmd = redoStack.pop(); cmd.execute(); undoStack.push(cmd); } }
 });
 
-// ... (refreshAll, runSimulation 등 Core Logic 유지) ...
 function refreshAll() {
     dom.entCont.innerHTML = ''; dom.itemCont.innerHTML = '';
     const updateUI = () => { refreshAll(); runSimulation(); };
@@ -243,7 +271,6 @@ function runSimulation() {
     });
 }
 
-// ... (Config, Snapshots, Item Sets 로직 유지) ...
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
     const rules = DM.getRules(); const meta = DM.getMeta();
@@ -258,7 +285,40 @@ document.getElementById('configBtn').addEventListener('click', () => {
     document.getElementById('statDescInput').value = descText;
     configModal.style.display = 'flex';
 });
-document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
+document.querySelector('.close-bulk').addEventListener('click', () => {
+    dom.bulkModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-modal').addEventListener('click', () => {
+    configModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-snapshot').addEventListener('click', () => {
+    snapshotModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-battle').addEventListener('click', () => {
+    battleModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-detail').addEventListener('click', () => {
+    detailModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-league').addEventListener('click', () => {
+    leagueModal.style.display = 'none';
+    forceRestoreFocus();
+});
+
+document.querySelector('.close-itemset')?.addEventListener('click', () => {
+    itemSetModal.style.display = 'none';
+    forceRestoreFocus();
+});
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
     const dmgInput = document.getElementById('dmgFormula');
     const cpInput = document.getElementById('cpFormula');
@@ -343,7 +403,7 @@ document.getElementById('exportBtn').addEventListener('click', () => {
 });
 
 // ========================================================
-// [NEW] Engine Export Handler (Zip 생성)
+// Engine Export Handlers
 // ========================================================
 function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
@@ -357,89 +417,67 @@ function triggerDownload(blob, filename) {
 document.getElementById('unityBtn').addEventListener('click', () => {
     if (!window.JSZip) return alert("JSZip library not loaded.");
     const zip = new JSZip();
-    
     zip.file("KalivraData.json", DM.exportForUnity());
-    
     zip.file("EntitySO.cs", CS_ENTITY_SO);
     zip.file("ItemSO.cs", CS_ITEM_SO);
     zip.file("KalivraImporter.cs", CS_IMPORTER);
-    
-    zip.generateAsync({type:"blob"}).then(function(content) {
-        triggerDownload(content, "Kalivra_Unity_Export.zip");
-    });
+    zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unity_Export.zip"); });
 });
-
 
 document.getElementById('unrealBtn').addEventListener('click', () => {
     if (!window.JSZip) return alert("JSZip library not loaded.");
     const zip = new JSZip();
-
     const jsonData = DM.exportForUnreal();
     zip.file("KalivraData_Unreal.json", jsonData);
-
-    const readmeContent = `[Kalivra Unreal Engine Import Guide]
-
-This package contains data exported from Kalivra for Unreal Engine DataTables.
-
-1. Define Data Structures (C++ or Blueprint)
-   Before importing, you must create 'DataTable Row' structures that match the JSON fields.
-
-   A. Using C++ (Recommended)
-      Copy and paste the following into your header (.h) file:
-
-      USTRUCT(BlueprintType)
-      struct FEntityDataRow : public FTableRowBase {
-          GENERATED_BODY()
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) float Variance;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString EquippedItemIds;
-          
-          /* Add stat fields based on your project definitions. 
-             Field names must match exactly: {statname}_Base, {statname}_Growth */
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Base;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Growth;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Base;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Growth;
-      };
-
-      USTRUCT(BlueprintType)
-      struct FItemDataRow : public FTableRowBase {
-          GENERATED_BODY()
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) bool IsActive;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Modifiers;
-          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Traits;
-      };
-
-   B. Using Blueprints
-      - Create a new 'Structure' (Blueprint -> Structure).
-      - Add variables with names identical to the JSON keys (e.g., Id, Variance, EquippedItemIds).
-
-2. Import Process
-   - Drag and drop 'KalivraData_Unreal.json' into the Unreal Content Browser.
-   - In the import dialog, select 'DataTable' as the asset type.
-   - Choose the corresponding row structure (FEntityDataRow or FItemDataRow) for each table.
-   - Note: The JSON contains two arrays (Entities, Items), so you may need to import them as separate DataTables.
-
-3. Developer Tips (Handling EquippedItemIds)
-   - 'EquippedItemIds' is a comma-separated string (e.g., "101,102").
-   - Blueprint: Use the 'Parse Into Array' node to split the IDs.
-   - C++: Use FString::ParseIntoArray to get an array of IDs and find items in your ItemDataTable.
-`;
+    const readmeContent = `[Kalivra Unreal Engine Import Guide]\n\nThis package contains data exported from Kalivra for Unreal Engine DataTables.\n\n1. Define Data Structures (C++ or Blueprint)\n   Before importing, you must create 'DataTable Row' structures that match the JSON fields.\n\n   A. Using C++ (Recommended)\n      Copy and paste the following into your header (.h) file:\n\n      USTRUCT(BlueprintType)\n      struct FEntityDataRow : public FTableRowBase {\n          GENERATED_BODY()\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) float Variance;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString EquippedItemIds;\n          \n          /* Add stat fields based on your project definitions. \n             Field names must match exactly: {statname}_Base, {statname}_Growth */\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Base;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Growth;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Base;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Growth;\n      };\n\n      USTRUCT(BlueprintType)\n      struct FItemDataRow : public FTableRowBase {\n          GENERATED_BODY()\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) bool IsActive;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Modifiers;\n          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Traits;\n      };\n\n   B. Using Blueprints\n      - Create a new 'Structure' (Blueprint -> Structure).\n      - Add variables with names identical to the JSON keys (e.g., Id, Variance, EquippedItemIds).\n\n2. Import Process\n   - Drag and drop 'KalivraData_Unreal.json' into the Unreal Content Browser.\n   - In the import dialog, select 'DataTable' as the asset type.\n   - Choose the corresponding row structure (FEntityDataRow or FItemDataRow) for each table.\n   - Note: The JSON contains two arrays (Entities, Items), so you may need to import them as separate DataTables.\n\n3. Developer Tips (Handling EquippedItemIds)\n   - 'EquippedItemIds' is a comma-separated string (e.g., "101,102").\n   - Blueprint: Use the 'Parse Into Array' node to split the IDs.\n   - C++: Use FString::ParseIntoArray to get an array of IDs and find items in your ItemDataTable.\n`;
     zip.file("Readme_Unreal.txt", readmeContent);
-
-    // 3. Compress and Trigger Download
-    zip.generateAsync({type:"blob"}).then(function(content) {
-        const url = URL.createObjectURL(content);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "Kalivra_Unreal_Export.zip";
-        a.click();
-        URL.revokeObjectURL(url);
-    });
+    zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unreal_Export.zip"); });
 });
 
-// ... (나머지 IPC 이벤트 핸들러 및 Battle 로직 유지) ...
+// ========================================================
+// [NEW] Bulk Edit Handlers
+// ========================================================
+document.getElementById('bulkEditBtn').addEventListener('click', () => {
+    dom.bulkModal.style.display = 'flex';
+    initBulkOptions();
+    refreshGrid();
+});
+
+document.querySelector('.close-bulk').addEventListener('click', () => dom.bulkModal.style.display = 'none');
+
+function initBulkOptions() {
+    const statSelect = document.getElementById('bulkStatSelect');
+    statSelect.innerHTML = DM.getRules().stats.map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join('');
+}
+
+function refreshGrid() {
+    UI.renderBulkGrid(dom.gridCont, (selectedIds) => {
+        selectedEntityIds = selectedIds;
+        dom.selCount.innerText = selectedIds.length;
+    });
+}
+
+document.getElementById('applyBulkBtn').addEventListener('click', () => {
+    if (selectedEntityIds.length === 0) return alert("Select entities first!");
+    const stat = document.getElementById('bulkStatSelect').value;
+    const op = document.getElementById('bulkOpSelect').value;
+    const val = parseFloat(document.getElementById('bulkValueInput').value) || 0;
+
+    DM.bulkUpdate(selectedEntityIds, stat, op, val);
+    
+    // Refresh Grid and Main UI
+    refreshGrid();
+    refreshAll();
+    runSimulation();
+    
+    // Flash effect
+    const btn = document.getElementById('applyBulkBtn');
+    const originalText = btn.innerText;
+    btn.innerText = "Applied!";
+    setTimeout(() => btn.innerText = originalText, 1000);
+});
+
+// ... (IPC Events) ...
 ipcRenderer.on('load-finished', (e, data) => { DM.loadProject(data); undoStack.length=0; redoStack.length=0; refreshAll(); runSimulation(); });
 ipcRenderer.on('save-finished', (e, msg) => alert(msg));
 ipcRenderer.on('export-finished', (e, msg) => alert(msg));
@@ -456,7 +494,7 @@ document.getElementById('addBtn').addEventListener('click', () => {
 document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }], traits: [] })); });
 ['min','max','close'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
 
-// ... (Battle & League Logic - 아까 추가한 에러 핸들링 포함) ...
+// ... (Battle Handlers, etc.) ...
 const battleModal = document.getElementById('battleModal');
 document.getElementById('openBattleBtn').addEventListener('click', () => {
     const sA = document.getElementById('battleEntA'), sB = document.getElementById('battleEntB');
@@ -465,27 +503,22 @@ document.getElementById('openBattleBtn').addEventListener('click', () => {
     battleModal.style.display = 'flex';
 });
 document.querySelector('.close-battle').addEventListener('click', () => battleModal.style.display = 'none');
-
 document.getElementById('runBattleBtn').addEventListener('click', () => {
     const idA = parseInt(document.getElementById('battleEntA').value);
     const entA = DM.getEntities().find(e => e.id === idA);
     const lv = parseInt(document.getElementById('battleLevel').value);
-    
     if (!entA) return alert("Select Attacker!");
     let statsA; try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return alert(`Error getting Stats A: ${e.message}`); }
     const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
     const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
-
     const results = [];
     const idB = document.getElementById('battleEntB').value;
     let targets = [];
     if (idB === 'all') targets = DM.getEntities().filter(e => e.id !== idA);
     else { const t = DM.getEntities().find(e => e.id == parseInt(idB)); if (t) targets.push(t); }
     if (targets.length === 0) return alert("Target not found");
-
     dom.battleLog.innerHTML = '<div style="padding:10px; text-align:center; color:#fee75c;">Simulating...</div>';
     dom.battleStatList.innerHTML = '';
-
     setTimeout(() => {
         try {
             let allBattleResults = [];
@@ -503,15 +536,9 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
             renderBattleLog(allBattleResults, entA.name);
             document.getElementById('statDisplayLevel').innerText = lv;
             renderBattleStats(entA, statsA, allBattleResults);
-        } catch (err) {
-            console.error(err);
-            dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`;
-            alert(`Simulation Failed:\n${err.message}`);
-        }
+        } catch (err) { console.error(err); dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`; alert(`Simulation Failed:\n${err.message}`); }
     }, 50);
 });
-
-// ... (M.C, League, RenderLog 등 나머지 로직 기존 유지) ...
 function runDetailAnalysis(idA, idB, lv) {
     const entA = DM.getEntities().find(e => e.id === idA);
     const entB = DM.getEntities().find(e => e.id === idB);
@@ -525,13 +552,11 @@ function runDetailAnalysis(idA, idB, lv) {
         const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
         battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
     } catch (e) { return alert(e.message); }
-
     detailModal.style.display = 'flex';
     detailModal.style.zIndex = "9999"; 
     const titleEl = document.getElementById('detailTitle') || document.querySelector('#detailModal h2');
     if (titleEl) { titleEl.innerText = `${entA.name} vs ${entB.name}`; }
     document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
-
     setTimeout(() => {
         const startTime = performance.now();
         const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules());
@@ -542,10 +567,8 @@ function runDetailAnalysis(idA, idB, lv) {
         document.getElementById('detailStats').innerHTML = `<style>.stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; } .stat-label { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; } .stat-value { font-size: 1.2em; font-weight: bold; color: #ddd; }</style><div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;"><div class="stat-grid-item"><span class="stat-label">Total Win Rate</span><span class="stat-value" style="color:${result.winRate>50?'#2da44e':'#e74c3c'}">${result.winRate.toFixed(2)}%</span></div><div class="stat-grid-item" style="border-color:${fwrColor}40"><span class="stat-label">Win% (When 1st)</span><span class="stat-value" style="color:${fwrColor}">${fwr}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg Turns</span><span class="stat-value" style="color:#d29922">${result.avgTurns.toFixed(2)}</span></div><div class="stat-grid-item"><span class="stat-label">Sim Time</span><span class="stat-value" style="color:#777">${(endTime-startTime).toFixed(0)}ms</span></div><div class="stat-grid-item"><span class="stat-label">Realized Crit %</span><span class="stat-value" style="color:#5fabff">${result.realizedCritRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Realized Dodge %</span><span class="stat-value" style="color:#b9bbbe">${result.realizedDodgeRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg DPT</span><span class="stat-value" style="color:#e74c3c">${Math.round(result.avgDpt)}</span></div><div class="stat-grid-item"><span class="stat-label">Avg Overkill</span><span class="stat-value" style="color:#e67e22">${Math.round(result.avgOverkill)}</span></div></div>`;
     }, 50);
 }
-
 if(btnDetail) { btnDetail.addEventListener('click', () => { const idA = parseInt(document.getElementById('battleEntA').value); const idB = document.getElementById('battleEntB').value; const lv = parseInt(document.getElementById('battleLevel').value); if (idB === 'all') return alert("Select a single opponent for M.C."); runDetailAnalysis(idA, parseInt(idB), lv); }); }
 if(closeDetail) closeDetail.addEventListener('click', () => detailModal.style.display = 'none');
-
 if (btnLeague) { btnLeague.addEventListener('click', () => { document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value; leagueModal.style.display = 'flex'; }); }
 if (closeLeague) closeLeague.addEventListener('click', () => leagueModal.style.display = 'none');
 if (btnRunLeague) {

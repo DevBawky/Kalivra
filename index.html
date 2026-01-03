@@ -11,63 +11,16 @@
     <link rel="stylesheet" href="css/modules.css">
     
     <style>
-        /* 차트 컨테이너 */
-        .chart-container {
-            position: relative;
-            flex: 1;
-            min-height: 0; 
-            width: 100%;
-            background-color: #202225;
-        }
-        
-        /* [Common] 모달 스타일 (중앙 정렬) */
-        .modal {
-            display: none; 
-            position: fixed; 
-            z-index: 1000; 
-            left: 0; top: 0;
-            width: 100%; height: 100%; 
-            overflow: hidden; 
-            background-color: rgba(0,0,0,0.6); 
-            justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background-color: #2f3136;
-            padding: 20px;
-            border: 1px solid #444;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            max-height: 95vh;
-            overflow-y: auto;
-            position: relative; /* 닫기 버튼 등 배치용 */
-        }
-
-        /* [League] 매트릭스 그리드 스타일 */
-        .matrix-container {
-            display: grid;
-            gap: 2px;
-            background-color: #111;
-            border: 1px solid #444;
-            overflow: auto;
-            max-height: 600px;
-        }
-        .matrix-cell {
-            display: flex; justify-content: center; align-items: center;
-            font-size: 0.8em; color: #fff; cursor: pointer;
-            transition: opacity 0.2s;
-            position: relative;
-        }
+        /* 기존 스타일 유지 */
+        .chart-container { position: relative; flex: 1; min-height: 0; width: 100%; background-color: #202225; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-content { background-color: #2f3136; padding: 20px; border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); max-height: 95vh; overflow-y: auto; position: relative; }
+        .matrix-container { display: grid; gap: 2px; background-color: #111; border: 1px solid #444; overflow: auto; max-height: 600px; }
+        .matrix-cell { display: flex; justify-content: center; align-items: center; font-size: 0.8em; color: #fff; cursor: pointer; transition: opacity 0.2s; position: relative; }
         .matrix-cell:hover { opacity: 0.8; z-index: 10; border: 1px solid #fff; }
-        .matrix-header {
-            background-color: #202225; font-weight: bold; color: #ccc;
-            display: flex; justify-content: center; align-items: center;
-            padding: 5px; text-align: center;
-            position: sticky; z-index: 5;
-        }
+        .matrix-header { background-color: #202225; font-weight: bold; color: #ccc; display: flex; justify-content: center; align-items: center; padding: 5px; text-align: center; position: sticky; z-index: 5; }
         .matrix-row-header { left: 0; }
         .matrix-col-header { top: 0; }
-
-        /* [Toolbar & UI Components] */
         .top-toolbar { display: flex; align-items: center; gap: 15px; height: 40px; background-color: #252526; border-bottom: 1px solid #3e3e42; padding: 0 15px; box-sizing: border-box; user-select: none; }
         .toolbar-group { display: flex; gap: 8px; }
         .toolbar-divider { width: 1px; height: 20px; background-color: #454545; margin: 0 5px; }
@@ -77,19 +30,17 @@
         .tool-btn.warning { color: #d29922; }
         .tool-btn.success { color: #2da44e; }
         .tool-btn.secondary { color: #b9bbbe; }
-        .tool-btn span { margin-right: 6px; }
-        
-        /* [NEW] 엔진 버튼 스타일 */
         .tool-btn.unity { color: #fff; background-color: #222c37; border: 1px solid #000; }
         .tool-btn.unity:hover { background-color: #000; color: #fff; border-color: #888; }
         .tool-btn.unreal { color: #fff; background-color: #0e1112; border: 1px solid #000; }
         .tool-btn.unreal:hover { background-color: #333; color: #fff; border-color: #888; }
+        /* [NEW] Bulk Edit Button Style */
+        .tool-btn.bulk { color: #4ec9b0; border: 1px solid #4ec9b033; }
+        .tool-btn.bulk:hover { background-color: #1e3a35; border-color: #4ec9b0; }
 
         .desc-input { width: 100%; height: 80px; background-color: #1e1e1e; border: 1px solid #3e3e42; color: #ccc; padding: 8px; font-family: monospace; resize: vertical; }
         .stat-label-text { cursor: help; text-decoration: underline dotted #666; }
         .input-error { border: 2px solid #e74c3c !important; background-color: #3a1d1d !important; color: #ffcccc !important; }
-        
-        /* Snapshot & Item Set List Items */
         .snapshot-list { max-height: 300px; overflow-y: auto; border: 1px solid #3e3e42; background: #1e1e1e; margin-bottom: 10px; }
         .snapshot-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #2d2d30; cursor: pointer; }
         .snapshot-item:hover { background-color: #2a2d3e; }
@@ -98,8 +49,14 @@
         .snapshot-date { font-size: 0.8em; color: #888; }
         .snapshot-actions button { background: none; border: none; cursor: pointer; color: #888; margin-left: 5px; }
         .snapshot-actions button:hover { color: #fff; }
-        .snapshot-actions .load-btn { color: #2da44e; }
-        .snapshot-actions .del-btn { color: #e74c3c; }
+
+        /* [NEW] Grid Table Styles */
+        .bulk-table { width: 100%; border-collapse: collapse; background: #1e1e1e; color: #ccc; font-size: 0.9em; min-width: 800px; }
+        .bulk-table th, .bulk-table td { border: 1px solid #333; padding: 6px 8px; text-align: center; }
+        .bulk-table th { background: #252526; position: sticky; top: 0; z-index: 10; font-weight: bold; color: #eee; text-align: center; }
+        .bulk-table tr:hover { background-color: #2a2d3e; }
+        .bulk-table tr.selected { background-color: #373b50; }
+        .bulk-table input[type="checkbox"] { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -128,12 +85,12 @@
         </div>
         <div class="toolbar-divider"></div>
         <div class="toolbar-group">
-            <button id="unityBtn" class="tool-btn unity">
-                <span style="color:#fff;">🎮</span> Unity
-            </button>
-            <button id="unrealBtn" class="tool-btn unreal">
-                <span style="color:#fff;">ⓤ</span> Unreal
-            </button>
+            <button id="unityBtn" class="tool-btn unity"><span style="color:#fff;">🎮</span> Unity</button>
+            <button id="unrealBtn" class="tool-btn unreal"><span style="color:#fff;">ⓤ</span> Unreal</button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <button id="bulkEditBtn" class="tool-btn bulk"><span>📊</span> Bulk Edit</button>
         </div>
     </div>
 
@@ -164,9 +121,7 @@
                     <option value="dmg">Avg Damage</option>
                 </select>
             </div>
-            <div class="chart-container" id="chartPanel">
-                <canvas id="balanceChart"></canvas>
-            </div>
+            <div class="chart-container" id="chartPanel"><canvas id="balanceChart"></canvas></div>
             <div class="resizer-vertical" id="resizerVertical"></div>
             <div class="analysis-panel" id="analysisPanel">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -211,146 +166,88 @@
                 <input type="text" id="metaDesc" placeholder="Description / Version Note" style="width:100%;">
             </div>
             <div class="config-section"><label>Main Damage Formula</label><input type="text" id="dmgFormula" class="formula-input"></div>
-            <div class="config-section">
-                <label>Hit Chance Formula (%)</label>
-                <input type="text" id="hitFormula" class="formula-input" placeholder="e.g. 95 + (a.acc - b.eva)">
-            </div>
+            <div class="config-section"><label>Hit Chance Formula (%)</label><input type="text" id="hitFormula" class="formula-input"></div>
             <div class="config-section"><label>Combat Power (CP) Formula</label><input type="text" id="cpFormula" class="formula-input"></div>
             <div class="config-section"><label>Define Stats</label><input type="text" id="statDefinitions" placeholder="e.g. hp, atk, def"></div>
-            <div class="config-section"><label>Stat Descriptions</label><textarea id="statDescInput" class="desc-input" placeholder="hp: Health Point..."></textarea></div>
+            <div class="config-section"><label>Stat Descriptions</label><textarea id="statDescInput" class="desc-input"></textarea></div>
             <button class="btn" id="applyConfigBtn">Apply Rules & Info</button>
         </div>
     </div>
-
     <div id="snapshotModal" class="modal">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3>Balance Snapshots</h3><span class="close-snapshot">&times;</span></div>
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <input type="text" id="newSnapshotName" placeholder="Snapshot Name" style="flex:1;">
-                <button id="createSnapshotBtn" class="btn" style="width:auto; background-color:#2da44e;">+ Create</button>
-            </div>
+            <div style="display:flex; gap:10px; margin-bottom:15px;"><input type="text" id="newSnapshotName" placeholder="Snapshot Name" style="flex:1;"><button id="createSnapshotBtn" class="btn" style="width:auto; background-color:#2da44e;">+ Create</button></div>
             <div class="snapshot-list" id="snapshotListContainer"></div>
-            <p style="font-size:0.8em; color:#888;">* Snapshots save the current state of all Entities, Items, and Rules.</p>
         </div>
     </div>
-    
     <div id="battleModal" class="modal">
         <div class="modal-content battle-content" style="width: 1400px; max-width: 95vw;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h3>Battle Simulator</h3>
-                <span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span>
-            </div>
-
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><h3>Battle Simulator</h3><span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span></div>
             <div class="battle-controls">
-                <div class="battle-control-group" style="flex:1;">
-                    <label style="color:#007acc;">Attacker</label>
-                    <select id="battleEntA" class="dark-select"></select>
-                </div>
+                <div class="battle-control-group" style="flex:1;"><label style="color:#007acc;">Attacker</label><select id="battleEntA" class="dark-select"></select></div>
                 <div style="align-self:end; padding-bottom:10px; font-weight:bold; color:#888;">VS</div>
-                <div class="battle-control-group" style="flex:1;">
-                    <label style="color:#ff5555;">Opponent</label>
-                    <select id="battleEntB" class="dark-select"><option value="all">ALL (League)</option></select>
-                </div>
-                <div class="battle-control-group" style="width:80px;">
-                    <label>Level</label>
-                    <input type="number" id="battleLevel" value="20">
-                </div>
-                <div class="battle-control-group" style="width:80px;">
-                    <label>Count</label>
-                    <input type="number" id="battleCount" value="100">
-                </div>
+                <div class="battle-control-group" style="flex:1;"><label style="color:#ff5555;">Opponent</label><select id="battleEntB" class="dark-select"><option value="all">ALL (League)</option></select></div>
+                <div class="battle-control-group" style="width:80px;"><label>Level</label><input type="number" id="battleLevel" value="20"></div>
+                <div class="battle-control-group" style="width:80px;"><label>Count</label><input type="number" id="battleCount" value="100"></div>
                 <button id="btnDetail" class="btn" style="width:auto; height:36px; background-color:#5fabff; margin-right:5px;">M.C</button>
                 <button id="runBattleBtn" class="btn" style="width:auto; height:36px; background-color:#e74c3c;">FIGHT</button>
             </div>
-
             <div class="battle-results-wrapper" style="display: flex; gap: 15px; height: 600px;">
-                <div class="battle-chart-area">
-                    <h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & Avg Turns</h4>
-                    <div style="flex:1; position:relative; min-height: 200px;">
-                        <canvas id="battleResultChart"></canvas>
-                    </div>
-                </div>
-                <div class="battle-log-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
-                    <h4 style="margin:0 0 5px 0; color:#ccc;">Battle Log</h4>
-                    <div id="battleLog" class="log-container" style="flex: 1; overflow-y: auto;">
-                        <div class="placeholder">Select entities and press FIGHT</div>
-                    </div>
-                </div>
-                <div class="battle-stat-area" style="flex: 0.8; display: flex; flex-direction: column; min-width: 0; background-color: #2f3136; padding: 10px; border-radius: 8px;">
-                    <h4 style="margin:0 0 5px 0; color:#ccc;">Stats (Lv.<span id="statDisplayLevel">?</span>)</h4>
-                    <div id="battleStatList" style="flex: 1; overflow-y: auto; padding-right: 5px;">
-                        <div class="placeholder" style="color:#666; font-size:0.9em;">Stats will appear here...</div>
-                    </div>
-                </div>
+                <div class="battle-chart-area"><h4 style="margin:0 0 10px 0; color:#ccc; text-align:center;">Win Rate & Avg Turns</h4><div style="flex:1; position:relative; min-height: 200px;"><canvas id="battleResultChart"></canvas></div></div>
+                <div class="battle-log-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;"><h4 style="margin:0 0 5px 0; color:#ccc;">Battle Log</h4><div id="battleLog" class="log-container" style="flex: 1; overflow-y: auto;"></div></div>
+                <div class="battle-stat-area" style="flex: 0.8; display: flex; flex-direction: column; min-width: 0; background-color: #2f3136; padding: 10px; border-radius: 8px;"><h4 style="margin:0 0 5px 0; color:#ccc;">Stats (Lv.<span id="statDisplayLevel">?</span>)</h4><div id="battleStatList" style="flex: 1; overflow-y: auto; padding-right: 5px;"></div></div>
             </div>
         </div>
     </div>
-    
     <div id="detailModal" class="modal">
         <div class="modal-content" style="width: 1300px; max-width: 95vw;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 id="detailTitle">Detailed Analysis</h3>
-                <span class="close-detail" style="font-size:2em; cursor:pointer;">&times;</span>
-            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3 id="detailTitle">Detailed Analysis</h3><span class="close-detail" style="font-size:2em; cursor:pointer;">&times;</span></div>
             <div style="display:flex; gap:20px; height:400px;">
-                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;">
-                    <h4 style="text-align:center; color:#ccc; margin:5px 0;">Turn Distribution (소요 턴)</h4>
-                    <div style="position:relative; height:350px;">
-                        <canvas id="detailTurnChart"></canvas>
-                    </div>
-                </div>
-                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;">
-                    <h4 style="text-align:center; color:#ccc; margin:5px 0;">Winning HP Distribution (승리 시 잔여 체력)</h4>
-                    <div style="position:relative; height:350px;">
-                        <canvas id="detailHpChart"></canvas>
-                    </div>
-                </div>
+                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;"><h4 style="text-align:center; color:#ccc; margin:5px 0;">Turn Distribution (소요 턴)</h4><div style="position:relative; height:350px;"><canvas id="detailTurnChart"></canvas></div></div>
+                <div style="flex:1; background:#202225; padding:10px; border-radius:8px;"><h4 style="text-align:center; color:#ccc; margin:5px 0;">Winning HP Distribution (승리 시 잔여 체력)</h4><div style="position:relative; height:350px;"><canvas id="detailHpChart"></canvas></div></div>
             </div>
-            <div id="detailStats" style="margin-top:15px; padding:10px; background:#2f3136; border-radius:4px; color:#ddd; font-family:monospace;">
-                Waiting for data...
-            </div>
+            <div id="detailStats" style="margin-top:15px; padding:10px; background:#2f3136; border-radius:4px; color:#ddd; font-family:monospace;">Waiting for data...</div>
         </div>
     </div>
-
     <div id="leagueModal" class="modal">
         <div class="modal-content" style="width: 1200px; max-width: 95vw; height: 90vh; display: flex; flex-direction: column;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <div style="display:flex; gap:15px; align-items:center;">
-                    <h3>League Matchup Matrix</h3>
-                    <div style="display:flex; align-items:center; gap:5px; font-size:0.9em;">
-                        <label>Level:</label>
-                        <input type="number" id="leagueLevel" value="20" style="width:50px; padding:3px; background:#111; border:1px solid #444; color:#fff;">
-                        <button id="runLeagueBtn" class="btn" style="width:auto; padding:3px 10px; font-size:0.9em; background-color:#2da44e;">Run League</button>
-                    </div>
-                </div>
+                <div style="display:flex; gap:15px; align-items:center;"><h3>League Matchup Matrix</h3><div style="display:flex; align-items:center; gap:5px; font-size:0.9em;"><label>Level:</label><input type="number" id="leagueLevel" value="20" style="width:50px; padding:3px; background:#111; border:1px solid #444; color:#fff;"><button id="runLeagueBtn" class="btn" style="width:auto; padding:3px 10px; font-size:0.9em; background-color:#2da44e;">Run League</button></div></div>
                 <span class="close-league" style="font-size:2em; cursor:pointer;">&times;</span>
             </div>
-            
-            <div id="leagueContainer" style="flex:1; position:relative; background:#000; overflow:hidden; display:flex; justify-content:center; align-items:center;">
-                <div style="color:#666;">Press 'Run League' to generate matrix.</div>
-            </div>
-            
-            <div style="margin-top:10px; font-size:0.8em; color:#888; display:flex; justify-content:space-between;">
-                <div>* Rows: Attacker / Cols: Defender</div>
-                <div style="display:flex; gap:10px;">
-                    <span style="color:#e74c3c">■ < 40%</span>
-                    <span style="color:#d29922">■ 40~60%</span>
-                    <span style="color:#2da44e">■ > 60%</span>
-                </div>
-            </div>
+            <div id="leagueContainer" style="flex:1; position:relative; background:#000; overflow:hidden; display:flex; justify-content:center; align-items:center;"><div style="color:#666;">Press 'Run League' to generate matrix.</div></div>
+        </div>
+    </div>
+    <div id="itemSetModal" class="modal">
+        <div class="modal-content" style="width: 400px;">
+            <span class="close-modal close-itemset">&times;</span><h2>Item Sets</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px; border-bottom:1px solid #3e3e42; padding-bottom:15px;"><input type="text" id="newItemSetName" placeholder="Set Name" style="flex: 4; padding: 8px; background-color: #111; border: 1px solid #444; color: white; border-radius: 4px;"><button id="saveItemSetBtn" class="btn" style="flex: 1; min-width: 100px;">Save</button></div>
+            <div id="itemSetList" style="max-height: 300px; overflow-y: auto;"></div>
         </div>
     </div>
 
-    <div id="itemSetModal" class="modal">
-        <div class="modal-content" style="width: 400px;">
-            <span class="close-modal close-itemset">&times;</span>
-            <h2>Item Sets</h2>
-            <div style="display:flex; gap:10px; margin-bottom:15px; border-bottom:1px solid #3e3e42; padding-bottom:15px;">
-                <input type="text" id="newItemSetName" placeholder="Set Name (e.g. Assassin Build)" 
-                    style="flex: 4; padding: 8px; background-color: #111; border: 1px solid #444; color: white; border-radius: 4px;">
-                <button id="saveItemSetBtn" class="btn" style="flex: 1; min-width: 100px;">Save</button>
+    <div id="bulkModal" class="modal">
+        <div class="modal-content" style="width: 90vw; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3>Bulk Data Editor</h3>
+                <span class="close-bulk" style="font-size:2em; cursor:pointer;">&times;</span>
             </div>
-            <div id="itemSetList" style="max-height: 300px; overflow-y: auto;"></div>
+            
+            <div class="bulk-controls" style="margin-bottom:10px; display:flex; gap:10px; align-items:center; background:#252526; padding:10px; border-radius:4px;">
+                <span style="font-size:0.9em; color:#888;">Selected: <b id="selectedCount" style="color:#fff;">0</b></span>
+                <div style="width:1px; height:20px; background:#444;"></div>
+                <select id="bulkStatSelect" class="dark-select" style="width:120px;"></select>
+                <select id="bulkOpSelect" class="dark-select" style="width:80px;">
+                    <option value="set">Set to</option>
+                    <option value="add">Add (+)</option>
+                    <option value="mult">Mult (*)</option>
+                </select>
+                <input type="number" id="bulkValueInput" placeholder="Value" style="width:80px; padding:5px; background:#111; border:1px solid #444; color:#fff;">
+                <button id="applyBulkBtn" class="btn" style="width:auto; padding:5px 15px; background:#2da44e;">Apply to Selected</button>
+            </div>
+
+            <div id="gridContainer" style="flex:1; overflow:auto; background:#1e1e1e; border:1px solid #3e3e42;">
+                </div>
         </div>
     </div>
 

@@ -132,12 +132,30 @@ module.exports = {
     undo: () => commandManager.undo(),
     redo: () => commandManager.redo(),
 
+    // [NEW] Bulk Update Function
+    bulkUpdate: (entityIds, stat, op, value) => {
+        projectData.current.entities.forEach(ent => {
+            if (entityIds.includes(ent.id)) {
+                // Ensure stat object exists
+                if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 };
+                
+                // Base Value update
+                let currentVal = ent.stats[stat].b;
+                if (op === 'set') currentVal = value;
+                else if (op === 'add') currentVal += value;
+                else if (op === 'mult') currentVal *= value;
+                
+                // Rounding for clean numbers (optional)
+                ent.stats[stat].b = parseFloat(currentVal.toFixed(2));
+            }
+        });
+    },
+
     // ===========================================
     // [NEW] 엔진 Export 로직
     // ===========================================
 
-    // 1. Unity용 JSON (List 기반 구조, C# 파싱 용이)
-// [dataManager.js] exportForUnity 함수 수정
+    // 1. Unity용 JSON
     exportForUnity: () => {
         const entities = projectData.current.entities;
         const items = projectData.current.items;
@@ -148,13 +166,11 @@ module.exports = {
                 id: e.id,
                 name: e.name,
                 variance: e.variance || 0,
-                // 스탯 리스트 (중첩 최소화)
                 stats: rules.stats.map(s => ({
                     statName: s,
                     baseVal: e.stats[s]?.b || 0,
                     growthVal: e.stats[s]?.g || 0
                 })),
-                // 해당 엔티티에 적용된 아이템 ID 리스트
                 itemIds: items.filter(i => i.targets.includes(e.id)).map(i => i.id)
             })),
             items: items.map(i => ({
@@ -162,7 +178,6 @@ module.exports = {
                 name: i.name,
                 active: i.active,
                 modifiers: i.modifiers.map(m => ({ stat: m.stat, op: m.op, val: m.val })),
-                // [핵심] Traits 구조를 최대한 단순화
                 traits: (i.traits || []).map(t => {
                     const trig = t.triggers[0];
                     const cond = trig.conditions[0];
@@ -183,40 +198,33 @@ module.exports = {
         return JSON.stringify(exportData, null, 2);
     },
 
-    // 2. Unreal용 JSON (DataTable Import 친화적)
+    // 2. Unreal용 JSON
     exportForUnreal: () => {
         const entities = projectData.current.entities;
         const items = projectData.current.items;
         const rules = projectData.current.gameRules;
 
-        // 1. 엔티티 테이블 (캐릭터 데이터 및 장착 아이템 ID)
         const entityTable = entities.map(e => {
             const row = {
-                Name: e.name, // DataTable의 Row Name으로 자동 지정됨
+                Name: e.name,
                 Id: e.id,
                 Variance: e.variance || 0,
-                // 적용된 아이템 ID들을 콤마로 구분된 문자열로 변환 (언리얼 파싱 용이)
                 EquippedItemIds: items.filter(i => i.targets.includes(e.id)).map(i => i.id).join(',')
             };
-            
             rules.stats.forEach(s => {
                 const statName = s.toLowerCase();
                 row[`${statName}_Base`] = e.stats[s]?.b || 0;
                 row[`${statName}_Growth`] = e.stats[s]?.g || 0;
             });
-            
             return row;
         });
 
-        // 2. 아이템 테이블 (아이템 정보 및 단순화된 효과)
         const itemTable = items.map(i => {
             const row = {
                 Name: i.name,
                 Id: i.id,
                 IsActive: i.active,
-                // 모디파이어 요약 (예: "atk:add:10,def:mult:1.2")
                 Modifiers: i.modifiers.map(m => `${m.stat}:${m.op}:${m.val}`).join(','),
-                // 트레이트 요약
                 Traits: (i.traits || []).map(t => {
                     const trig = t.triggers[0];
                     const cond = trig.conditions[0];
