@@ -28,7 +28,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
 
     // [수정 완료] rules -> dmgFormula로 변경 (이 부분이 원인이었습니다)
     const gameRules = (typeof dmgFormula === 'string') 
-        ? { dmgFormula: dmgFormula, hitFormula: "95 + (a.acc - b.eva)" } 
+        ? { dmgFormula: dmgFormula, hitFormula: "(a.acc - b.eva)" } 
         : dmgFormula;
 
     const fighterA = initFighter(entA, statsA);
@@ -127,7 +127,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
                             ? (context.damage || 0) * (eff.value / 100) 
                             : eff.value;
                         healAmount = Math.floor(healAmount);
-                        if (healAmount > 0) {
+                        if (healAmount != 0) {
                             effTarget.currentHp = Math.min(effTarget.currentHp + healAmount, effTarget.currentStats.hp);
                             addLog(turn, owner, effTarget, 'heal', healAmount, `[${sourceName}] Healed ${healAmount} HP`);
                         }
@@ -145,7 +145,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
                             ? (context.damage || 0) * (eff.value / 100) 
                             : eff.value;
                         dmgVal = Math.floor(dmgVal);
-                        if (dmgVal > 0) {
+                        if (dmgVal != 0) {
                             effTarget.currentHp -= dmgVal;
                             addLog(turn, owner, effTarget, 'attack', dmgVal, `[${sourceName}] deals extra damage`);
                         }
@@ -156,7 +156,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
                         effTarget.currentStats[eff.stat] += eff.value;
                         addLog(turn, owner, effTarget, 'buff', eff.value, `[${sourceName}] ${eff.stat.toUpperCase()} ${eff.value>0?'+':''}${eff.value}`);
                         if (eff.duration && eff.duration > 0) {
-                            effTarget.activeBuffs.push({ stat: eff.stat, val: eff.value, duration: eff.duration, source: sourceName });
+                            effTarget.activeBuffs.push({ stat: eff.stat, val: eff.value, duration: eff.duration+1, source: sourceName });
                         }
                         break;
                 }
@@ -190,7 +190,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         } catch (e) {
             const acc = aStats.acc || 0;
             const eva = bStats.eva || 0;
-            hitChance = 95 + (acc - eva);
+            hitChance = (acc - eva);
         }
 
         hitChance = Math.max(5, Math.min(100, hitChance));

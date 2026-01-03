@@ -34,7 +34,7 @@ let projectData = {
                 aspd: "Attack Speed"
             },
             dmgFormula: 'a.atk * (100 / (100 + b.def))',
-            hitFormula: "95 + (a.acc - b.eva)",
+            hitFormula: "(a.acc - b.eva)",
             cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + acc + eva * 2'
         }
     }

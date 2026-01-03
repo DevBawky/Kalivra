@@ -162,7 +162,7 @@ document.getElementById('configBtn').addEventListener('click', () => {
     document.getElementById('metaAuthor').value = meta.author || '';
     document.getElementById('metaDesc').value = meta.description || '';
     document.getElementById('dmgFormula').value = rules.dmgFormula;
-    document.getElementById('hitFormula').value = rules.hitFormula || "95 + (a.acc - b.eva)";
+    document.getElementById('hitFormula').value = rules.hitFormula || "(a.acc - b.eva)";
     document.getElementById('cpFormula').value = rules.cpFormula;
     document.getElementById('statDefinitions').value = rules.stats.join(', ');
     let descText = ""; if (rules.descriptions) descText = Object.entries(rules.descriptions).map(([k, v]) => `${k}: ${v}`).join('\n');
@@ -694,7 +694,7 @@ function initProject() {
             descriptions: defaultDescriptions, 
             defaultValues: defaultValues,
             dmgFormula: "atk * (100 / (100 + def))", 
-            hitFormula: "95 + (a.acc - b.eva)",
+            hitFormula: "(a.acc - b.eva)",
             cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" 
         }); 
     }
