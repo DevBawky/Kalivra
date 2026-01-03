@@ -1,5 +1,6 @@
 const { ipcMain } = require('electron');
-const { saveKal, loadKal, exportCsv } = require('./fileManager');
+// [수정 1] exportJson을 추가로 불러옵니다.
+const { saveKal, loadKal, exportCsv, exportJson } = require('./fileManager');
 
 function registerHandlers(win) {
     ipcMain.on('min-app', () => win.minimize());
@@ -20,8 +21,6 @@ function registerHandlers(win) {
         }, 100);
     }); 
 
-
-
     ipcMain.on('save-kal', async (e, data) => {
         const msg = await saveKal(win, data);
         if(msg) e.reply('save-finished', msg);
@@ -34,6 +33,11 @@ function registerHandlers(win) {
 
     ipcMain.on('export-csv', async (e, content) => {
         const msg = await exportCsv(win, content);
+        if(msg) e.reply('export-finished', msg);
+    });
+
+    ipcMain.on('export-json', async (e, data) => {
+        const msg = await exportJson(win, data);
         if(msg) e.reply('export-finished', msg);
     });
 }

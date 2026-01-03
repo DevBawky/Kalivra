@@ -36,7 +36,6 @@ const ModalSystem = {
     actionsEl: null,
 
     init() {
-        // 1. 이미 오버레이가 있다면 다시 만들지 않고 찾아옵니다.
         if (document.getElementById('custom-modal-overlay')) {
             this.overlay = document.getElementById('custom-modal-overlay');
             this.msgEl = this.overlay.querySelector('#custom-modal-msg');
@@ -44,20 +43,17 @@ const ModalSystem = {
             return;
         }
         
-        // 2. CSS 및 오버레이 생성
         const css = `
             #custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 20000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
             #custom-modal-box { background: #1e1e1e; border: 1px solid #454545; padding: 25px; width: 850px; border-radius: 8px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 15px; max-height: 85vh; }
             #custom-modal-msg { color: #eee; font-size: 14px; white-space: pre-wrap; line-height: 1.5; overflow-y: auto; }
             #custom-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; }
             
-            /* 버튼 스타일 */
             .custom-modal-btn { background: #3e3e42; color: #fff; border: 1px solid #555; padding: 8px 20px; cursor: pointer; border-radius: 4px; font-size: 13px; min-width: 80px; transition: background 0.2s; }
             .custom-modal-btn:hover { background: #505055; }
             .custom-modal-btn.primary { background: #007acc; border-color: #007acc; }
             .custom-modal-btn.primary:hover { background: #0062a3; }
             
-            /* 프리셋 리스트 스타일 */
             .preset-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-height: 500px; overflow-y: auto; padding-right: 5px; }
             .preset-item { background: #252526; padding: 15px; border: 1px solid #3e3e42; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
             .preset-item:hover { background: #2d2d30; border-color: #007acc; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
@@ -70,6 +66,12 @@ const ModalSystem = {
             .del-preset-btn:hover { color: #ce3838; }
             .label-error { color: #ff6b6b !important; font-weight: bold; transition: color 0.2s; }
             .input-error { border-color: #ff6b6b !important; background-color: rgba(255, 107, 107, 0.1) !important; }
+
+            .nav-dropdown { position: relative; display: inline-block; }
+            .dropdown-content { display: none; position: absolute; right: 0; background-color: #252526; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5); z-index: 1000; border: 1px solid #454545; border-radius: 4px; }
+            .dropdown-content button { color: #ccc; padding: 12px 16px; text-decoration: none; display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer; font-size: 13px; }
+            .dropdown-content button:hover { background-color: #3e3e42; color: white; }
+            .show-dropdown { display: block; }
         `;
         const style = document.createElement('style'); 
         style.textContent = css; 
@@ -84,14 +86,13 @@ const ModalSystem = {
         this.msgEl = overlay.querySelector('#custom-modal-msg');
         this.actionsEl = overlay.querySelector('#custom-modal-actions');
         
-        // ESC 키 닫기
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.overlay.style.display === 'flex') this.close();
         });
     },
 
     show(msg, type, onConfirm, onCancel) {
-        if (!this.overlay) this.init(); // 안전장치
+        if (!this.overlay) this.init();
 
         this.msgEl.innerHTML = typeof msg === 'string' ? msg : '';
         if (typeof msg !== 'string') {
@@ -100,7 +101,6 @@ const ModalSystem = {
         }
         this.actionsEl.innerHTML = '';
         const box = document.getElementById('custom-modal-box');
-        // confirm 타입일 때만 박스 크기를 줄여서 심플하게 표현
         box.style.width = (type === 'alert' || type === 'confirm') ? '400px' : '850px';
 
         const okBtn = document.createElement('button');
@@ -115,7 +115,6 @@ const ModalSystem = {
             cancelBtn.onclick = () => { this.close(); if (onCancel) onCancel(); };
             this.actionsEl.appendChild(okBtn);
             this.actionsEl.appendChild(cancelBtn);
-            // 아니오 버튼에 포커스 주지 말고, 입력창이 있을 수 있으니 상황 봐서 처리
         } else {
             this.actionsEl.appendChild(okBtn);
             okBtn.focus();
@@ -123,7 +122,6 @@ const ModalSystem = {
         this.overlay.style.display = 'flex';
     },
 
-    // [수정된 부분] prompt() 대신 기존 Modal을 활용하여 입력받음
     saveCurrentPreset() {
         const container = document.createElement('div');
         
@@ -138,7 +136,6 @@ const ModalSystem = {
         input.style.cssText = "width: 100%; padding: 8px; background: #252526; border: 1px solid #454545; color: white; border-radius: 4px; outline: none;";
         input.placeholder = "Preset Name";
         
-        // 엔터키 누르면 저장 버튼 클릭 효과
         input.onkeydown = (e) => {
             if(e.key === 'Enter') {
                 const primaryBtn = this.actionsEl.querySelector('.custom-modal-btn.primary');
@@ -147,10 +144,9 @@ const ModalSystem = {
         };
         container.appendChild(input);
 
-        // 기존 show 함수의 'confirm' 타입(작은 창 + Yes/No 버튼)을 재활용
         this.show(container, 'confirm', () => {
             const name = input.value.trim();
-            if(!name) return; // 이름 없으면 무시
+            if(!name) return;
 
             const newPreset = {
                 name: name,
@@ -164,11 +160,9 @@ const ModalSystem = {
             saved.push(newPreset);
             localStorage.setItem('KAL_CUSTOM_PRESETS', JSON.stringify(saved));
             
-            // 모달이 닫힌 직후 알림을 띄우기 위해 약간의 지연
             setTimeout(() => this.alert(`Preset "${name}" saved!`), 100);
         });
 
-        // 모달 열린 후 인풋에 포커스
         setTimeout(() => input.focus(), 50);
     },
 
@@ -338,7 +332,6 @@ function injectPresetButton() {
     const dmgInput = document.getElementById('dmgFormula');
     if (!dmgInput) return;
 
-    // 중복 생성 방지를 위해 기존 그룹 제거 후 다시 생성
     const existingGroup = document.getElementById('btnPresetGroup');
     if (existingGroup) existingGroup.remove();
 
@@ -346,20 +339,17 @@ function injectPresetButton() {
     btnGroup.id = 'btnPresetGroup';
     btnGroup.style.cssText = "display:flex; gap:10px; margin-bottom:8px; justify-content:flex-end;";
 
-    // [Save 버튼]
     const btnSave = document.createElement('button');
     btnSave.innerHTML = '💾 Save Preset';
     btnSave.className = 'custom-modal-btn';
     btnSave.style.cssText = "padding: 5px 12px; font-size: 0.8em; border-color:#4ecca3; color:#4ecca3; background:transparent; cursor:pointer;";
     
-    // 이벤트를 직접 할당
     btnSave.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
         ModalSystem.saveCurrentPreset();
     };
 
-    // [Load 버튼]
     const btnLoad = document.createElement('button');
     btnLoad.innerHTML = '📚 Load Preset';
     btnLoad.className = 'custom-modal-btn';
@@ -378,6 +368,107 @@ function injectPresetButton() {
     btnGroup.appendChild(btnSave);
     btnGroup.appendChild(btnLoad);
     dmgInput.parentElement.insertBefore(btnGroup, dmgInput);
+}
+
+function setupExportDropdown() {
+    const oldBtn = document.getElementById('exportBtn');
+    if (!oldBtn || oldBtn.parentElement.classList.contains('nav-dropdown')) return;
+
+    const dropdownDiv = document.createElement('div');
+    dropdownDiv.className = 'nav-dropdown';
+    
+    const mainBtn = document.createElement('button');
+    mainBtn.innerHTML = 'Export ▼';
+    mainBtn.className = oldBtn.className + ' dropbtn'; 
+    mainBtn.style.cssText = oldBtn.style.cssText; 
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.id = 'exportDropdownContent';
+    contentDiv.className = 'dropdown-content';
+    
+    const btnCSV = document.createElement('button');
+    btnCSV.innerHTML = '📄 To CSV (Table)';
+    btnCSV.onclick = (e) => {
+        e.stopPropagation();
+        exportToCSV(); 
+        contentDiv.classList.remove('show-dropdown');
+    };
+
+    const btnJSON = document.createElement('button');
+    btnJSON.innerHTML = '📦 To JSON (Share)';
+    btnJSON.onclick = (e) => {
+        e.stopPropagation();
+        exportToJSON(); 
+        contentDiv.classList.remove('show-dropdown');
+    };
+
+    contentDiv.appendChild(btnCSV);
+    contentDiv.appendChild(btnJSON);
+    
+    dropdownDiv.appendChild(mainBtn);
+    dropdownDiv.appendChild(contentDiv);
+    
+    oldBtn.parentNode.replaceChild(dropdownDiv, oldBtn);
+
+    mainBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        contentDiv.classList.toggle('show-dropdown');
+    });
+
+    window.addEventListener('click', (e) => {
+        if (!e.target.matches('.dropbtn')) {
+            const dropdowns = document.getElementsByClassName("dropdown-content");
+            for (let i = 0; i < dropdowns.length; i++) {
+                if (dropdowns[i].classList.contains('show-dropdown')) {
+                    dropdowns[i].classList.remove('show-dropdown');
+                }
+            }
+        }
+    });
+}
+
+function exportToCSV() {
+    const entities = DM.getEntities();
+    const rules = DM.getRules();
+    const maxLv = parseInt(dom.maxLevel.value) || 20;
+    const metric = dom.metric.value; 
+    const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
+
+    let csv = `Level,Metric (${metric.toUpperCase()}),Formula: ${formula.replace(/,/g, ';')}\n`;
+    csv += "Level," + entities.map(e => e.name).join(',') + "\n";
+
+    for(let lv=1; lv <= maxLv; lv++){ 
+        const row = [lv];
+        entities.forEach(e => {
+            const stats = Sim.getStatsAtLevel(e, lv, DM.getItems(), rules);
+            let val = 0;
+            const dummyTarget = {};
+            if (rules.stats) rules.stats.forEach(s => dummyTarget[s] = 0);
+
+            try {
+                if (metric === 'cp') val = Sim.calculateValue(rules.cpFormula, stats);
+                else val = Sim.calculateValue(rules.dmgFormula, { a: stats, b: dummyTarget });
+            } catch (err) { val = 0; }
+            
+            row.push(val.toFixed(2)); 
+        });
+        csv += row.join(',') + "\n";
+    }
+    
+    ipcRenderer.send('export-csv', csv);
+}
+
+function exportToJSON() {
+    const exportData = {
+        meta: DM.getMeta(),
+        rules: DM.getRules(),
+        entities: DM.getEntities(),
+        items: DM.getItems(),
+        exportedAt: new Date().toISOString(),
+        note: "This is a shared balance configuration."
+    };
+    
+    ipcRenderer.send('export-json', exportData);
 }
 
 function debounce(func, timeout = 300) {
@@ -494,19 +585,74 @@ function runSimulation() {
     const crossovers = Sim.analyzeCrossovers(rawData, max);
     let logHTML = '';
     
-    // Diff Logic
     if (hasSnapshot) {
-        const diff = currentTotal - snapshotTotal;
-        const sign = diff >= 0 ? '+' : '';
-        const color = diff >= 0 ? '#4ecca3' : '#e74c3c';
-        const pcent = snapshotTotal !== 0 ? ((diff / snapshotTotal) * 100).toFixed(1) : 0;
-        logHTML += `<div class="log-item" style="border-bottom:1px solid #444; margin-bottom:10px; padding-bottom:5px;">
-            <span style="color:#aaa;">Total Value Diff:</span> 
-            <b style="color:${color}">${sign}${Math.round(diff)} (${sign}${pcent}%)</b>
-        </div>`;
+        const snapshot = DM.getSnapshots()[comparisonSnapshotIndex];
+        const snapName = snapshot ? snapshot.name : "Snapshot";
+        
+        logHTML += `<div style="margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+            <div style="font-weight:bold; color:#ccc; margin-bottom:5px;">⚡ VS [${snapName}] Comparison</div>`;
+
+        DM.getEntities().forEach(ent => {
+            const currVal = rawData[ent.id] ? rawData[ent.id].data.reduce((a,b)=>a+b, 0) : 0;
+            
+            let snapVal = 0;
+            let foundInSnap = false;
+            
+            if (snapshot && snapshot.data && snapshot.data.entities) {
+                const snapEnt = snapshot.data.entities.find(e => e.name === ent.name);
+                if (snapEnt) {
+                    foundInSnap = true;
+                    const snapItems = snapshot.data.items || [];
+                    const snapRules = snapshot.data.rules || rules;
+                    const snapFormula = metric === 'cp' ? snapRules.cpFormula : snapRules.dmgFormula;
+                    
+                    for(let lv=1; lv<=max; lv++) {
+                        try {
+                            const sStats = Sim.getStatsAtLevel(snapEnt, lv, snapItems, snapRules);
+                            let val = 0;
+                            if (metric === 'cp') val = Sim.calculateValue(snapFormula, sStats);
+                            else val = Sim.calculateValue(snapFormula, { a: sStats, b: dummyTarget });
+                            snapVal += val;
+                        } catch(e) { snapVal += 0; }
+                    }
+                }
+            }
+
+            if (foundInSnap) {
+                const diff = currVal - snapVal;
+                const pcent = snapVal !== 0 ? ((diff / snapVal) * 100).toFixed(1) : 0;
+                
+                const isBuff = diff >= 0;
+                const color = isBuff ? '#4ecca3' : '#e74c3c';
+                const sign = isBuff ? '+' : '';
+                const icon = isBuff ? '▲' : '▼';
+
+                logHTML += `
+                <div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:#eee;">${ent.name}</span>
+                    <div style="text-align:right;">
+                        <div style="font-size:0.8em; color:#888;">Avg ${metric.toUpperCase()}</div>
+                        <span style="color:${color}; font-weight:bold;">
+                            ${Math.round(snapVal/max)} <span style="font-size:0.8em; color:#666;">→</span> ${Math.round(currVal/max)}
+                        </span>
+                        <span style="margin-left:8px; color:${color}; background:${color}20; padding:2px 6px; border-radius:4px; font-size:0.85em;">
+                            ${icon} ${sign}${pcent}%
+                        </span>
+                    </div>
+                </div>`;
+            } else {
+                logHTML += `
+                <div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; color:#888;">
+                    <span style="font-weight:bold; color:#eee;">${ent.name}</span>
+                    <span style="float:right; font-size:0.8em; color:#5fabff;">(New Entity)</span>
+                </div>`;
+            }
+        });
+
+        logHTML += `</div>`;
     }
 
-    if (crossovers.length === 0) logHTML += '<div class="log-item placeholder">No crossover points detected.</div>';
+    if (crossovers.length === 0 && !hasSnapshot) logHTML += '<div class="log-item placeholder">No crossover points detected.</div>';
     crossovers.forEach(c => { 
         logHTML += `<div class="log-item"><span class="log-level">Lv.${c.lv-1}->${c.lv}</span>: <b style="color:${c.wColor}">${c.winnerName}</b> overtakes <b style="color:${c.lColor}">${c.loserName}</b></div>`; 
     });
@@ -515,7 +661,6 @@ function runSimulation() {
 
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
-    // 1. 모달 시스템 초기화 확인 (이게 안 되어 있으면 클릭이 안 먹힘)
     ModalSystem.init(); 
 
     const rules = DM.getRules(); 
@@ -529,7 +674,6 @@ document.getElementById('configBtn').addEventListener('click', () => {
     document.getElementById('cpFormula').value = rules.cpFormula;
     document.getElementById('statDefinitions').value = rules.stats.join(', ');
 
-    // 2. 버튼 주입
     injectPresetButton();
     
     configModal.style.display = 'flex';
@@ -634,11 +778,6 @@ if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => {
 
 document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', DM.getProjectData()));
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
-document.getElementById('exportBtn').addEventListener('click', () => {
-    let csv = "Level," + DM.getEntities().map(e=>e.name).join(',') + "\n";
-    for(let lv=1; lv<=parseInt(dom.maxLevel.value); lv++){ csv += lv + "," + DM.getEntities().map(e => Sim.calculateValue(DM.getRules().cpFormula, Sim.getStatsAtLevel(e, lv, DM.getItems(), DM.getRules()))).join(',') + "\n"; }
-    ipcRenderer.send('export-csv', csv);
-});
 
 function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
@@ -883,6 +1022,8 @@ document.body.addEventListener('focusout', (e) => {
 function initProject() {
     ModalSystem.init();
     injectComparisonUI(); 
+    setupExportDropdown();
+
     const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
     const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", acc: "Accuracy (명중)", eva: "Evasion (회피)", cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" };
     const defaultValues = { hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } };
