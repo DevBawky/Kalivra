@@ -6,7 +6,121 @@ const Charts = require('./src/renderer/chartManager');
 const Utils = require('./src/renderer/utils');
 const Battle = require('./src/renderer/battle');
 
-// DOM Elements
+const CS_ENTITY_SO = `
+using UnityEngine;
+using System.Collections.Generic;
+
+public class EntitySO : ScriptableObject {
+    public int id;
+    public string unitName;
+    public float variance;
+    [System.Serializable] public struct StatData { public string stat; public float baseVal; public float growthVal; }
+    public List<StatData> stats = new List<StatData>();
+    public List<ItemSO> equippedItems = new List<ItemSO>();
+}
+`;
+
+const CS_ITEM_SO = `
+using UnityEngine;
+using System.Collections.Generic;
+
+public class ItemSO : ScriptableObject {
+    public int id;
+    public string itemName;
+    public bool active;
+
+    [System.Serializable] 
+    public struct ModifierData { public string stat; public string op; public float val; }
+    public List<ModifierData> modifiers = new List<ModifierData>();
+
+    [System.Serializable]
+    public struct SimpleTrait { 
+        public string traitName;
+        public string trigger;
+        public float chance;
+        public string effectType;
+        public string target;
+        public float value;
+        public string stat;
+        public int duration;
+    }
+
+    public List<SimpleTrait> traits = new List<SimpleTrait>();
+}
+`;
+
+const CS_IMPORTER = `
+using UnityEngine;
+using UnityEditor;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+[System.Serializable] public class StatRaw { public string statName; public float baseVal; public float growthVal; }
+[System.Serializable] public class ModRaw { public string stat; public string op; public float val; }
+[System.Serializable] public class TraitRaw { public string traitName; public string trigger; public float chance; public string effectType; public string target; public float value; public string stat; public int duration; }
+[System.Serializable] public class ItemRaw { public int id; public string name; public bool active; public List<ModRaw> modifiers; public List<TraitRaw> traits; }
+[System.Serializable] public class EntityRaw { public int id; public string name; public float variance; public List<StatRaw> stats; public List<int> itemIds; }
+[System.Serializable] public class KalivraJsonRoot { public List<EntityRaw> entities; public List<ItemRaw> items; }
+
+public class KalivraImporter : AssetPostprocessor {
+    private const string FILE_NAME = "KalivraData.json";
+    private const string ENTITY_PATH = "Assets/Resources/KalivraData/Entities";
+    private const string ITEM_PATH = "Assets/Resources/KalivraData/Items";
+
+    [MenuItem("Kalivra/Force Import JSON")]
+    public static void ManualImport() {
+        string[] guids = AssetDatabase.FindAssets("KalivraData t:TextAsset");
+        if (guids.Length == 0) return;
+        ExecuteImport(AssetDatabase.GUIDToAssetPath(guids[0]));
+    }
+
+    static void ExecuteImport(string jsonPath) {
+        string jsonContent = File.ReadAllText(jsonPath);
+        KalivraJsonRoot data = JsonUtility.FromJson<KalivraJsonRoot>(jsonContent);
+        if (data == null) return;
+
+        if (!Directory.Exists(ENTITY_PATH)) Directory.CreateDirectory(ENTITY_PATH);
+        if (!Directory.Exists(ITEM_PATH)) Directory.CreateDirectory(ITEM_PATH);
+
+        Dictionary<int, ItemSO> itemMap = new Dictionary<int, ItemSO>();
+        foreach (var i in data.items) {
+            string path = ITEM_PATH + "/" + i.name.Replace(" ", "_") + ".asset";
+            ItemSO asset = GetOrCreateAsset<ItemSO>(path);
+            asset.id = i.id; asset.itemName = i.name; asset.active = i.active;
+            asset.modifiers = i.modifiers.Select(m => new ItemSO.ModifierData { stat = m.stat, op = m.op, val = m.val }).ToList();
+            asset.traits = i.traits.Select(t => new ItemSO.SimpleTrait {
+                traitName = t.traitName, trigger = t.trigger, chance = t.chance, 
+                effectType = t.effectType, target = t.target, value = t.value, stat = t.stat, duration = t.duration
+            }).ToList();
+            EditorUtility.SetDirty(asset);
+            itemMap[i.id] = asset;
+        }
+
+        foreach (var ent in data.entities) {
+            string path = ENTITY_PATH + "/" + ent.name.Replace(" ", "_") + ".asset";
+            EntitySO asset = GetOrCreateAsset<EntitySO>(path);
+            asset.id = ent.id; asset.unitName = ent.name; asset.variance = ent.variance;
+            asset.stats = ent.stats.Select(s => new EntitySO.StatData { stat = s.statName, baseVal = s.baseVal, growthVal = s.growthVal }).ToList();
+            
+            asset.equippedItems.Clear();
+            if(ent.itemIds != null) {
+                foreach(int id in ent.itemIds) if(itemMap.ContainsKey(id)) asset.equippedItems.Add(itemMap[id]);
+            }
+            EditorUtility.SetDirty(asset);
+        }
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+    }
+
+    static T GetOrCreateAsset<T>(string path) where T : ScriptableObject {
+        T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+        if (asset == null) { asset = ScriptableObject.CreateInstance<T>(); AssetDatabase.CreateAsset(asset, path); }
+        return asset;
+    }
+}
+`;
+
 const dom = {
     entCont: document.getElementById('entityContainer'),
     itemCont: document.getElementById('itemContainer'),
@@ -17,27 +131,20 @@ const dom = {
     analysisLog: document.getElementById('analysisLog')
 };
 
-// Modal Elements
 const detailModal = document.getElementById('detailModal');
 const btnDetail = document.getElementById('btnDetail');
 const closeDetail = document.querySelector('.close-detail');
-
-// League Elements
 const leagueModal = document.getElementById('leagueModal');
 const btnLeague = document.getElementById('openLeagueBtn');
 const closeLeague = document.querySelector('.close-league');
 const btnRunLeague = document.getElementById('runLeagueBtn');
 const leagueContainer = document.getElementById('leagueContainer');
-
-// [NEW] Item Set Elements
 const itemSetModal = document.getElementById('itemSetModal');
-// HTML에 <button id="btnItemSet">Sets</button> 가 있다고 가정
 const btnItemSet = document.getElementById('btnItemSet'); 
 const closeItemSet = document.querySelector('.close-itemset');
 const saveItemSetBtn = document.getElementById('saveItemSetBtn');
 const itemSetList = document.getElementById('itemSetList');
 
-// --- Window Controls & Utilities ---
 const originalAlert = window.alert;
 window.alert = function(message) { originalAlert(message); ipcRenderer.send('force-focus'); };
 const originalConfirm = window.confirm;
@@ -47,15 +154,11 @@ function debounce(func, timeout = 300) {
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); };
 }
-
 const debouncedSimulation = debounce(() => { runSimulation(); }, 200);
 
-// ==========================================
-// 1. Undo / Redo System
-// ==========================================
+// ... (Undo/Redo System 유지) ...
 const undoStack = []; const redoStack = [];
 function executeCommand(command) { command.execute(); undoStack.push(command); redoStack.length = 0; }
-
 class PropertyChangeCommand { constructor(t,k,o,n,cb){this.t=t;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.t[this.k]=this.n;if(this.cb)this.cb();} undo(){this.t[this.k]=this.o;if(this.cb)this.cb();} }
 class StatChangeCommand { constructor(s,t,o,n,cb){this.s=s;this.t=t;this.o=o;this.n=n;this.cb=cb;} execute(){this.s[this.t]=this.n;if(this.cb)this.cb();} undo(){this.s[this.t]=this.o;if(this.cb)this.cb();} }
 class ItemModChangeCommand { constructor(m,k,o,n,cb){this.m=m;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.m[this.k]=this.n;if(this.cb)this.cb();} undo(){this.m[this.k]=this.o;if(this.cb)this.cb();} }
@@ -65,23 +168,13 @@ class RemoveEntityCommand { constructor(i){this.i=i;this.rm=null;} execute(){thi
 class AddEntityCommand { constructor(d){this.d=d;} execute(){DM.addEntity(this.d);refreshAll();runSimulation();} undo(){DM.removeEntity(DM.getEntities().length-1);refreshAll();runSimulation();} }
 class RemoveItemCommand { constructor(i){this.i=i;this.rm=null;} execute(){this.rm=DM.getItems()[this.i];DM.getItems().splice(this.i,1);refreshAll();runSimulation();} undo(){DM.getItems().splice(this.i,0,this.rm);refreshAll();runSimulation();} }
 class AddItemCommand { constructor(d){this.d=d;} execute(){DM.addItem(this.d);refreshAll();runSimulation();} undo(){DM.getItems().pop();refreshAll();runSimulation();} }
-
-// [NEW] Command for Loading Item Set (Undoable)
 class LoadItemSetCommand {
     constructor(newItems) {
-        this.newItems = JSON.parse(JSON.stringify(newItems)); // Deep Copy
-        this.oldItems = JSON.parse(JSON.stringify(DM.getItems())); // Backup
+        this.newItems = JSON.parse(JSON.stringify(newItems)); 
+        this.oldItems = JSON.parse(JSON.stringify(DM.getItems())); 
     }
-    execute() {
-        DM.setItems(this.newItems);
-        refreshAll();
-        runSimulation();
-    }
-    undo() {
-        DM.setItems(this.oldItems);
-        refreshAll();
-        runSimulation();
-    }
+    execute() { DM.setItems(this.newItems); refreshAll(); runSimulation(); }
+    undo() { DM.setItems(this.oldItems); refreshAll(); runSimulation(); }
 }
 
 document.addEventListener('keydown', (e) => {
@@ -89,9 +182,7 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { if (redoStack.length > 0) { const cmd = redoStack.pop(); cmd.execute(); undoStack.push(cmd); } }
 });
 
-// ==========================================
-// 2. Core Logic
-// ==========================================
+// ... (refreshAll, runSimulation 등 Core Logic 유지) ...
 function refreshAll() {
     dom.entCont.innerHTML = ''; dom.itemCont.innerHTML = '';
     const updateUI = () => { refreshAll(); runSimulation(); };
@@ -152,9 +243,7 @@ function runSimulation() {
     });
 }
 
-// ==========================================
-// 3. Config, Snapshots, & Item Sets
-// ==========================================
+// ... (Config, Snapshots, Item Sets 로직 유지) ...
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
     const rules = DM.getRules(); const meta = DM.getMeta();
@@ -182,34 +271,21 @@ document.getElementById('applyConfigBtn').addEventListener('click', () => {
     const simpleValidate = (formula) => {
         let depth = 0;
         for (let char of formula) {
-            if (char === '(') depth++;
-            else if (char === ')') depth--;
+            if (char === '(') depth++; else if (char === ')') depth--;
             if (depth < 0) return { valid: false, error: "닫는 괄호가 너무 많습니다." };
         }
         if (depth !== 0) return { valid: false, error: "괄호의 짝이 맞지 않습니다." };
-
         const doubleOps = formula.match(/[\+\-\*\/]{2,}/g);
-        if (doubleOps) {
-            for (const op of doubleOps) {
-                if (op !== '**' && !op.endsWith('-')) {
-                    return { valid: false, error: `잘못된 연산자 중복: ${op}` };
-                }
-            }
-        }
+        if (doubleOps) { for (const op of doubleOps) { if (op !== '**' && !op.endsWith('-')) return { valid: false, error: `잘못된 연산자 중복: ${op}` }; } }
         return { valid: true };
     };
 
     const dmgCheck = simpleValidate(dmgInput.value);
-    if (!dmgCheck.valid) { dmgInput.classList.add('input-error'); alert(dmgCheck.error); return; } // 경고창 추가
-    else { dmgInput.classList.remove('input-error'); }
-
+    if (!dmgCheck.valid) { dmgInput.classList.add('input-error'); alert(dmgCheck.error); return; } else { dmgInput.classList.remove('input-error'); }
     const cpCheck = simpleValidate(cpInput.value);
-    if (!cpCheck.valid) { cpInput.classList.add('input-error'); alert(cpCheck.error); return; }
-    else { cpInput.classList.remove('input-error'); }
-
+    if (!cpCheck.valid) { cpInput.classList.add('input-error'); alert(cpCheck.error); return; } else { cpInput.classList.remove('input-error'); }
     const hitCheck = simpleValidate(hitInput.value);
-    if (!hitCheck.valid) { hitInput.classList.add('input-error'); alert(hitCheck.error); return; } 
-    else { hitInput.classList.remove('input-error'); }
+    if (!hitCheck.valid) { hitInput.classList.add('input-error'); alert(hitCheck.error); return; } else { hitInput.classList.remove('input-error'); }
 
     const rawDesc = document.getElementById('statDescInput').value; 
     const descriptions = {};
@@ -219,10 +295,7 @@ document.getElementById('applyConfigBtn').addEventListener('click', () => {
     DM.setRules({ stats: newStats, descriptions: descriptions, dmgFormula: dmgInput.value, hitFormula: hitInput.value, cpFormula: cpInput.value });
     
     DM.getEntities().forEach(ent => { newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; }); });
-    
-    configModal.style.display = 'none'; 
-    refreshAll(); 
-    runSimulation();
+    configModal.style.display = 'none'; refreshAll(); runSimulation();
 });
 
 const snapshotModal = document.getElementById('snapshotModal');
@@ -244,56 +317,22 @@ document.getElementById('snapshotBtn').addEventListener('click', () => { renderS
 document.querySelector('.close-snapshot').addEventListener('click', () => snapshotModal.style.display = 'none');
 document.getElementById('createSnapshotBtn').addEventListener('click', () => { const name = document.getElementById('newSnapshotName').value.trim(); DM.createSnapshot(name); document.getElementById('newSnapshotName').value=''; renderSnapshots(); });
 
-// [NEW] Item Set Logic
 function renderItemSets() {
     const sets = DM.getItemSets();
     itemSetList.innerHTML = '';
-    if (sets.length === 0) {
-        itemSetList.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No saved sets.</div>';
-        return;
-    }
+    if (sets.length === 0) { itemSetList.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No saved sets.</div>'; return; }
     sets.forEach((set, idx) => {
         const el = document.createElement('div');
-        el.className = 'snapshot-item'; // Reuse snapshot style
-        el.innerHTML = `
-            <div class="snapshot-info">
-                <span class="snapshot-name">${set.name}</span>
-                <span style="font-size:0.8em; color:#777;">${set.items.length} items</span>
-            </div>
-            <div class="snapshot-actions">
-                <button class="load-btn">Load</button>
-                <button class="del-btn">✕</button>
-            </div>
-        `;
-        el.querySelector('.load-btn').addEventListener('click', () => {
-            if(confirm(`Replace current items with "${set.name}"?`)) {
-                executeCommand(new LoadItemSetCommand(set.items));
-                itemSetModal.style.display = 'none';
-            }
-        });
-        el.querySelector('.del-btn').addEventListener('click', () => {
-            if(confirm('Delete this set?')) {
-                DM.deleteItemSet(idx);
-                renderItemSets();
-            }
-        });
+        el.className = 'snapshot-item'; 
+        el.innerHTML = `<div class="snapshot-info"><span class="snapshot-name">${set.name}</span><span style="font-size:0.8em; color:#777;">${set.items.length} items</span></div><div class="snapshot-actions"><button class="load-btn">Load</button><button class="del-btn">✕</button></div>`;
+        el.querySelector('.load-btn').addEventListener('click', () => { if(confirm(`Replace current items with "${set.name}"?`)) { executeCommand(new LoadItemSetCommand(set.items)); itemSetModal.style.display = 'none'; } });
+        el.querySelector('.del-btn').addEventListener('click', () => { if(confirm('Delete this set?')) { DM.deleteItemSet(idx); renderItemSets(); } });
         itemSetList.appendChild(el);
     });
 }
-
 if(btnItemSet) btnItemSet.addEventListener('click', () => { renderItemSets(); itemSetModal.style.display = 'flex'; });
 if(closeItemSet) closeItemSet.addEventListener('click', () => itemSetModal.style.display = 'none');
-// renderer.js 하단부 (saveItemSetBtn 이벤트 리스너 교체)
-
-if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => {
-    const name = document.getElementById('newItemSetName').value.trim();
-    if(!name) return alert("Please enter a name.");
-    DM.addItemSet(name);
-    document.getElementById('newItemSetName').value = '';
-    renderItemSets();
-    ipcRenderer.send('save-kal', DM.getProjectData());
-});
-
+if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => { const name = document.getElementById('newItemSetName').value.trim(); if(!name) return alert("Please enter a name."); DM.addItemSet(name); document.getElementById('newItemSetName').value = ''; renderItemSets(); ipcRenderer.send('save-kal', DM.getProjectData()); });
 
 document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', DM.getProjectData()));
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
@@ -302,6 +341,105 @@ document.getElementById('exportBtn').addEventListener('click', () => {
     for(let lv=1; lv<=parseInt(dom.maxLevel.value); lv++){ csv += lv + "," + DM.getEntities().map(e => Sim.calculateValue(DM.getRules().cpFormula, Sim.getStatsAtLevel(e, lv, DM.getItems(), DM.getRules()))).join(',') + "\n"; }
     ipcRenderer.send('export-csv', csv);
 });
+
+// ========================================================
+// [NEW] Engine Export Handler (Zip 생성)
+// ========================================================
+function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+document.getElementById('unityBtn').addEventListener('click', () => {
+    if (!window.JSZip) return alert("JSZip library not loaded.");
+    const zip = new JSZip();
+    
+    zip.file("KalivraData.json", DM.exportForUnity());
+    
+    zip.file("EntitySO.cs", CS_ENTITY_SO);
+    zip.file("ItemSO.cs", CS_ITEM_SO);
+    zip.file("KalivraImporter.cs", CS_IMPORTER);
+    
+    zip.generateAsync({type:"blob"}).then(function(content) {
+        triggerDownload(content, "Kalivra_Unity_Export.zip");
+    });
+});
+
+
+document.getElementById('unrealBtn').addEventListener('click', () => {
+    if (!window.JSZip) return alert("JSZip library not loaded.");
+    const zip = new JSZip();
+
+    const jsonData = DM.exportForUnreal();
+    zip.file("KalivraData_Unreal.json", jsonData);
+
+    const readmeContent = `[Kalivra Unreal Engine Import Guide]
+
+This package contains data exported from Kalivra for Unreal Engine DataTables.
+
+1. Define Data Structures (C++ or Blueprint)
+   Before importing, you must create 'DataTable Row' structures that match the JSON fields.
+
+   A. Using C++ (Recommended)
+      Copy and paste the following into your header (.h) file:
+
+      USTRUCT(BlueprintType)
+      struct FEntityDataRow : public FTableRowBase {
+          GENERATED_BODY()
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) float Variance;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString EquippedItemIds;
+          
+          /* Add stat fields based on your project definitions. 
+             Field names must match exactly: {statname}_Base, {statname}_Growth */
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Base;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) float hp_Growth;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Base;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) float atk_Growth;
+      };
+
+      USTRUCT(BlueprintType)
+      struct FItemDataRow : public FTableRowBase {
+          GENERATED_BODY()
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Id;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) bool IsActive;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Modifiers;
+          UPROPERTY(EditAnywhere, BlueprintReadWrite) FString Traits;
+      };
+
+   B. Using Blueprints
+      - Create a new 'Structure' (Blueprint -> Structure).
+      - Add variables with names identical to the JSON keys (e.g., Id, Variance, EquippedItemIds).
+
+2. Import Process
+   - Drag and drop 'KalivraData_Unreal.json' into the Unreal Content Browser.
+   - In the import dialog, select 'DataTable' as the asset type.
+   - Choose the corresponding row structure (FEntityDataRow or FItemDataRow) for each table.
+   - Note: The JSON contains two arrays (Entities, Items), so you may need to import them as separate DataTables.
+
+3. Developer Tips (Handling EquippedItemIds)
+   - 'EquippedItemIds' is a comma-separated string (e.g., "101,102").
+   - Blueprint: Use the 'Parse Into Array' node to split the IDs.
+   - C++: Use FString::ParseIntoArray to get an array of IDs and find items in your ItemDataTable.
+`;
+    zip.file("Readme_Unreal.txt", readmeContent);
+
+    // 3. Compress and Trigger Download
+    zip.generateAsync({type:"blob"}).then(function(content) {
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "Kalivra_Unreal_Export.zip";
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+});
+
+// ... (나머지 IPC 이벤트 핸들러 및 Battle 로직 유지) ...
 ipcRenderer.on('load-finished', (e, data) => { DM.loadProject(data); undoStack.length=0; redoStack.length=0; refreshAll(); runSimulation(); });
 ipcRenderer.on('save-finished', (e, msg) => alert(msg));
 ipcRenderer.on('export-finished', (e, msg) => alert(msg));
@@ -309,31 +447,16 @@ document.getElementById('calcBtn').addEventListener('click', runSimulation);
 dom.metric.addEventListener('change', runSimulation);
 document.getElementById('addBtn').addEventListener('click', () => {
     const color = '#' + Math.floor(Math.random() * 16777215).toString(16);
-    
     const rules = DM.getRules();
     const defaults = rules.defaultValues || {}; 
     const newStats = {};
-
-    rules.stats.forEach(s => {
-        newStats[s] = defaults[s] ? { ...defaults[s] } : { b: 0, g: 0 };
-    });
-
-    executeCommand(new AddEntityCommand({ 
-        id: Date.now(), 
-        name: 'New Unit', 
-        color, 
-        stats: newStats,
-        variance: 0, 
-        isLocked: false 
-    }));
+    rules.stats.forEach(s => { newStats[s] = defaults[s] ? { ...defaults[s] } : { b: 0, g: 0 }; });
+    executeCommand(new AddEntityCommand({ id: Date.now(), name: 'New Unit', color, stats: newStats, variance: 0, isLocked: false }));
 });
 document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }], traits: [] })); });
 ['min','max','close'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
 
-
-// ==========================================
-// 4. Battle & League Logic
-// ==========================================
+// ... (Battle & League Logic - 아까 추가한 에러 핸들링 포함) ...
 const battleModal = document.getElementById('battleModal');
 document.getElementById('openBattleBtn').addEventListener('click', () => {
     const sA = document.getElementById('battleEntA'), sB = document.getElementById('battleEntB');
@@ -349,7 +472,7 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
     const lv = parseInt(document.getElementById('battleLevel').value);
     
     if (!entA) return alert("Select Attacker!");
-    let statsA; try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return alert("Error statsA"); }
+    let statsA; try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return alert(`Error getting Stats A: ${e.message}`); }
     const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
     const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
 
@@ -364,211 +487,111 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
     dom.battleStatList.innerHTML = '';
 
     setTimeout(() => {
-        let allBattleResults = [];
-        targets.forEach(entB => {
-            const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
-            const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
-            const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
-            const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, parseInt(document.getElementById('battleCount').value), DM.getRules());
-            results.push(batchResult);
-            allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
-        });
-        Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results);
-        renderBattleLog(allBattleResults, entA.name);
-        document.getElementById('statDisplayLevel').innerText = lv;
-        renderBattleStats(entA, statsA, allBattleResults);
+        try {
+            let allBattleResults = [];
+            const battleCount = parseInt(document.getElementById('battleCount').value) || 100;
+            const rules = DM.getRules();
+            targets.forEach(entB => {
+                const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), rules);
+                const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
+                const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
+                const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, battleCount, rules);
+                results.push(batchResult);
+                allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
+            });
+            Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results);
+            renderBattleLog(allBattleResults, entA.name);
+            document.getElementById('statDisplayLevel').innerText = lv;
+            renderBattleStats(entA, statsA, allBattleResults);
+        } catch (err) {
+            console.error(err);
+            dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`;
+            alert(`Simulation Failed:\n${err.message}`);
+        }
     }, 50);
 });
 
-// M.C (Detail Analysis) Logic Helper
+// ... (M.C, League, RenderLog 등 나머지 로직 기존 유지) ...
 function runDetailAnalysis(idA, idB, lv) {
     const entA = DM.getEntities().find(e => e.id === idA);
     const entB = DM.getEntities().find(e => e.id === idB);
     if (!entA || !entB) return alert("Entities not found.");
-
     let statsA, statsB, battleEntA, battleEntB;
     try {
         statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules());
         const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
         battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
-
         statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
         const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
         battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
     } catch (e) { return alert(e.message); }
 
     detailModal.style.display = 'flex';
-    // [FIX] MC창 최상단 노출
     detailModal.style.zIndex = "9999"; 
-
-    // [FIX] 타이틀 텍스트 변경
     const titleEl = document.getElementById('detailTitle') || document.querySelector('#detailModal h2');
-    if (titleEl) {
-        titleEl.innerText = `${entA.name} vs ${entB.name}`;
-    }
-
+    if (titleEl) { titleEl.innerText = `${entA.name} vs ${entB.name}`; }
     document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
 
     setTimeout(() => {
         const startTime = performance.now();
         const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules());
         const endTime = performance.now();
-
-        Charts.renderDetailCharts(
-            document.getElementById('detailTurnChart').getContext('2d'),
-            document.getElementById('detailHpChart').getContext('2d'),
-            result
-        );
-
+        Charts.renderDetailCharts(document.getElementById('detailTurnChart').getContext('2d'), document.getElementById('detailHpChart').getContext('2d'), result);
         const fwr = result.firstTurnWinRate.toFixed(1);
         const fwrColor = result.firstTurnWinRate > 60 ? '#e74c3c' : (result.firstTurnWinRate < 40 ? '#e74c3c' : '#2da44e');
-        
-        document.getElementById('detailStats').innerHTML = `
-            <style>
-                .stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; }
-                .stat-label { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; }
-                .stat-value { font-size: 1.2em; font-weight: bold; color: #ddd; }
-            </style>
-            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;">
-                <div class="stat-grid-item"><span class="stat-label">Total Win Rate</span><span class="stat-value" style="color:${result.winRate>50?'#2da44e':'#e74c3c'}">${result.winRate.toFixed(2)}%</span></div>
-                <div class="stat-grid-item" style="border-color:${fwrColor}40"><span class="stat-label">Win% (When 1st)</span><span class="stat-value" style="color:${fwrColor}">${fwr}%</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Avg Turns</span><span class="stat-value" style="color:#d29922">${result.avgTurns.toFixed(2)}</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Sim Time</span><span class="stat-value" style="color:#777">${(endTime-startTime).toFixed(0)}ms</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Realized Crit %</span><span class="stat-value" style="color:#5fabff">${result.realizedCritRate.toFixed(1)}%</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Realized Dodge %</span><span class="stat-value" style="color:#b9bbbe">${result.realizedDodgeRate.toFixed(1)}%</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Avg DPT</span><span class="stat-value" style="color:#e74c3c">${Math.round(result.avgDpt)}</span></div>
-                <div class="stat-grid-item"><span class="stat-label">Avg Overkill</span><span class="stat-value" style="color:#e67e22">${Math.round(result.avgOverkill)}</span></div>
-            </div>
-        `;
+        document.getElementById('detailStats').innerHTML = `<style>.stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; } .stat-label { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; } .stat-value { font-size: 1.2em; font-weight: bold; color: #ddd; }</style><div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;"><div class="stat-grid-item"><span class="stat-label">Total Win Rate</span><span class="stat-value" style="color:${result.winRate>50?'#2da44e':'#e74c3c'}">${result.winRate.toFixed(2)}%</span></div><div class="stat-grid-item" style="border-color:${fwrColor}40"><span class="stat-label">Win% (When 1st)</span><span class="stat-value" style="color:${fwrColor}">${fwr}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg Turns</span><span class="stat-value" style="color:#d29922">${result.avgTurns.toFixed(2)}</span></div><div class="stat-grid-item"><span class="stat-label">Sim Time</span><span class="stat-value" style="color:#777">${(endTime-startTime).toFixed(0)}ms</span></div><div class="stat-grid-item"><span class="stat-label">Realized Crit %</span><span class="stat-value" style="color:#5fabff">${result.realizedCritRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Realized Dodge %</span><span class="stat-value" style="color:#b9bbbe">${result.realizedDodgeRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg DPT</span><span class="stat-value" style="color:#e74c3c">${Math.round(result.avgDpt)}</span></div><div class="stat-grid-item"><span class="stat-label">Avg Overkill</span><span class="stat-value" style="color:#e67e22">${Math.round(result.avgOverkill)}</span></div></div>`;
     }, 50);
 }
 
-if(btnDetail) {
-    btnDetail.addEventListener('click', () => {
-        const idA = parseInt(document.getElementById('battleEntA').value);
-        const idB = document.getElementById('battleEntB').value;
-        const lv = parseInt(document.getElementById('battleLevel').value);
-        if (idB === 'all') return alert("Select a single opponent for M.C.");
-        runDetailAnalysis(idA, parseInt(idB), lv);
-    });
-}
+if(btnDetail) { btnDetail.addEventListener('click', () => { const idA = parseInt(document.getElementById('battleEntA').value); const idB = document.getElementById('battleEntB').value; const lv = parseInt(document.getElementById('battleLevel').value); if (idB === 'all') return alert("Select a single opponent for M.C."); runDetailAnalysis(idA, parseInt(idB), lv); }); }
 if(closeDetail) closeDetail.addEventListener('click', () => detailModal.style.display = 'none');
 
-// [NEW] League Matrix Logic
-if (btnLeague) {
-    btnLeague.addEventListener('click', () => {
-        document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value;
-        leagueModal.style.display = 'flex';
-    });
-}
+if (btnLeague) { btnLeague.addEventListener('click', () => { document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value; leagueModal.style.display = 'flex'; }); }
 if (closeLeague) closeLeague.addEventListener('click', () => leagueModal.style.display = 'none');
-
 if (btnRunLeague) {
     btnRunLeague.addEventListener('click', () => {
-        const entities = DM.getEntities();
-        if (entities.length < 2) return alert("Need at least 2 entities.");
+        const entities = DM.getEntities(); if (entities.length < 2) return alert("Need at least 2 entities.");
         const lv = parseInt(document.getElementById('leagueLevel').value) || 20;
-
         leagueContainer.innerHTML = '<div style="color:#fee75c;">Simulating League... This may take a moment.</div>';
-
         setTimeout(() => {
-            const count = 100; // Fixed 100 runs
-            const size = entities.length;
-            const matrix = [];
-
-            // 1. Run all matchups
+            const count = 100; const size = entities.length; const matrix = [];
             for (let i = 0; i < size; i++) {
-                const row = [];
-                const entA = entities[i];
-                
+                const row = []; const entA = entities[i];
                 const statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules());
                 const itemsA = DM.getItems().filter(item => item.active && item.targets.includes(entA.id));
                 const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(it=>it.traits||[])] };
-
                 for (let j = 0; j < size; j++) {
-                    const entB = entities[j];
-                    if (i === j) {
-                        row.push(null); 
-                        continue;
-                    }
-
+                    const entB = entities[j]; if (i === j) { row.push(null); continue; }
                     const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
                     const itemsB = DM.getItems().filter(item => item.active && item.targets.includes(entB.id));
                     const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(it=>it.traits||[])] };
-
                     const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, count, DM.getRules());
                     row.push(res.winRate);
                 }
                 matrix.push(row);
             }
-
-            // 2. Render Grid
-            const totalCols = size + 1;
-            leagueContainer.innerHTML = '';
-            
-            const grid = document.createElement('div');
-            grid.className = 'matrix-container';
-            grid.style.gridTemplateColumns = `120px repeat(${size}, 60px)`;
-            grid.style.gridTemplateRows = `40px repeat(${size}, 40px)`;
-
-            const emptyCorner = document.createElement('div');
-            emptyCorner.className = 'matrix-header matrix-row-header matrix-col-header';
-            emptyCorner.innerText = "ATK \\ DEF";
-            grid.appendChild(emptyCorner);
-
-            // Col Headers (Defenders)
-            entities.forEach(ent => {
-                const h = document.createElement('div');
-                h.className = 'matrix-header matrix-col-header';
-                h.innerText = ent.name;
-                h.style.color = ent.color;
-                h.style.writingMode = 'vertical';
-                // [FIX] 상단 이름 정방향 출력 (rotate 제거)
-                // h.style.transform = 'rotate(180deg)'; 
-                grid.appendChild(h);
-            });
-
-            // Rows
+            const totalCols = size + 1; leagueContainer.innerHTML = '';
+            const grid = document.createElement('div'); grid.className = 'matrix-container';
+            grid.style.gridTemplateColumns = `120px repeat(${size}, 60px)`; grid.style.gridTemplateRows = `40px repeat(${size}, 40px)`;
+            const emptyCorner = document.createElement('div'); emptyCorner.className = 'matrix-header matrix-row-header matrix-col-header'; emptyCorner.innerText = "ATK \\ DEF"; grid.appendChild(emptyCorner);
+            entities.forEach(ent => { const h = document.createElement('div'); h.className = 'matrix-header matrix-col-header'; h.innerText = ent.name; h.style.color = ent.color; h.style.writingMode = 'vertical'; grid.appendChild(h); });
             for (let i = 0; i < size; i++) {
-                const h = document.createElement('div');
-                h.className = 'matrix-header matrix-row-header';
-                h.innerText = entities[i].name;
-                h.style.color = entities[i].color;
-                grid.appendChild(h);
-
+                const h = document.createElement('div'); h.className = 'matrix-header matrix-row-header'; h.innerText = entities[i].name; h.style.color = entities[i].color; grid.appendChild(h);
                 for (let j = 0; j < size; j++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'matrix-cell';
+                    const cell = document.createElement('div'); cell.className = 'matrix-cell';
                     const winRate = matrix[i][j];
-
-                    if (winRate === null) {
-                        cell.style.backgroundColor = '#222';
-                        cell.innerText = '-';
-                    } else {
-                        if (winRate > 60) cell.style.backgroundColor = 'rgba(45, 164, 78, 0.6)'; 
-                        else if (winRate < 40) cell.style.backgroundColor = 'rgba(231, 76, 60, 0.6)'; 
-                        else cell.style.backgroundColor = 'rgba(210, 153, 34, 0.6)'; 
-
-                        cell.innerText = Math.round(winRate) + '%';
-                        cell.addEventListener('click', () => {
-                            runDetailAnalysis(entities[i].id, entities[j].id, lv);
-                        });
-                        cell.title = `${entities[i].name} vs ${entities[j].name}\nWin Rate: ${winRate.toFixed(1)}%`;
-                    }
+                    if (winRate === null) { cell.style.backgroundColor = '#222'; cell.innerText = '-'; } 
+                    else { if (winRate > 60) cell.style.backgroundColor = 'rgba(45, 164, 78, 0.6)'; else if (winRate < 40) cell.style.backgroundColor = 'rgba(231, 76, 60, 0.6)'; else cell.style.backgroundColor = 'rgba(210, 153, 34, 0.6)'; cell.innerText = Math.round(winRate) + '%'; cell.addEventListener('click', () => { runDetailAnalysis(entities[i].id, entities[j].id, lv); }); cell.title = `${entities[i].name} vs ${entities[j].name}\nWin Rate: ${winRate.toFixed(1)}%`; }
                     grid.appendChild(cell);
                 }
             }
             leagueContainer.appendChild(grid);
-
         }, 50);
     });
 }
-
-
 function renderBattleLog(allResults, heroName) {
     if (!allResults || allResults.length === 0) return;
     dom.battleLog.innerHTML = '';
-    
     allResults.forEach((item, index) => {
         const { opponent, result } = item;
         const allLogs = result.allLogs || [];
@@ -576,42 +599,23 @@ function renderBattleLog(allResults, heroName) {
         const avgTurns = result.avgTurns.toFixed(1);
         const isWin = result.winRate >= 50;
         const tagClass = isWin ? 'tag-win' : 'tag-lose';
-        
-        const group = document.createElement('div');
-        group.className = 'log-group';
-        
-        const header = document.createElement('div');
-        header.className = 'log-header';
+        const group = document.createElement('div'); group.className = 'log-group';
+        const header = document.createElement('div'); header.className = 'log-header';
         header.innerHTML = `<span>VS ${opponent.name}</span><div style="display:flex; gap:10px; align-items:center;"><span style="font-size:0.8em; color:#ccc;">Avg Turns: <span style="color:#fee75c;">${avgTurns}</span></span><span class="win-tag ${tagClass}">Win ${winRate}%</span></div>`;
-        
-        const content = document.createElement('div');
-        content.className = 'log-content';
-        const navContainer = document.createElement('div');
-        navContainer.style.display = 'flex';
-        navContainer.style.justifyContent = 'space-between';
-        navContainer.style.alignItems = 'center';
-        navContainer.style.marginBottom = '10px';
-        navContainer.style.paddingBottom = '10px';
-        navContainer.style.borderBottom = '1px solid #3e3e42';
-
-        const logTextBox = document.createElement('div');
-        logTextBox.className = 'log-text-box';
+        const content = document.createElement('div'); content.className = 'log-content';
+        const navContainer = document.createElement('div'); navContainer.style.display = 'flex'; navContainer.style.justifyContent = 'space-between'; navContainer.style.alignItems = 'center'; navContainer.style.marginBottom = '10px'; navContainer.style.paddingBottom = '10px'; navContainer.style.borderBottom = '1px solid #3e3e42';
+        const logTextBox = document.createElement('div'); logTextBox.className = 'log-text-box';
         let currentLogIdx = 0; 
-
         const updateLogDisplay = () => {
             const logs = allLogs[currentLogIdx];
             navContainer.innerHTML = `<button class="nav-btn prev-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">◀</button><span style="font-size:0.9em; font-weight:bold; color:#5fabff;">Battle ${currentLogIdx + 1} / ${allLogs.length}</span><button class="nav-btn next-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">▶</button>`;
             navContainer.querySelector('.prev-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx - 1 + allLogs.length) % allLogs.length; updateLogDisplay(); };
             navContainer.querySelector('.next-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx + 1) % allLogs.length; updateLogDisplay(); };
-
             if (logs && logs.length > 0) {
-                let html = '';
-                let currentTurn = 0;
+                let html = ''; let currentTurn = 0;
                 logs.forEach(log => {
                     if (log.turn !== currentTurn) { currentTurn = log.turn; html += `<div class="log-turn-divider">Turn ${currentTurn}</div>`; }
-                    const isHero = (log.actor === heroName);
-                    const actorClass = isHero ? 'log-actor-hero' : 'log-actor-enemy';
-                    const valClass = log.action === 'attack' ? 'log-val-dmg' : 'log-val-heal';
+                    const isHero = (log.actor === heroName); const actorClass = isHero ? 'log-actor-hero' : 'log-actor-enemy'; const valClass = log.action === 'attack' ? 'log-val-dmg' : 'log-val-heal';
                     let msg = '';
                     if (log.action === 'attack') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#aaa;">attacked</span> <span class="log-target">${log.target}</span> → <span class="${valClass}">-${log.val} HP</span>`;
                     else if (log.action === 'die') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#888;">${log.msg}</span>`;
@@ -619,29 +623,20 @@ function renderBattleLog(allResults, heroName) {
                     else msg = `<span class="${actorClass}">${log.actor}</span>: ${log.msg}`;
                     html += `<div class="log-item-detail">${msg}</div>`;
                 });
-                html += `<div class="log-footer">Simulation End</div>`;
-                logTextBox.innerHTML = html;
+                html += `<div class="log-footer">Simulation End</div>`; logTextBox.innerHTML = html;
             } else { logTextBox.innerHTML = '<div style="color:#666; text-align:center;">No log data available</div>'; }
         };
-        if (allLogs.length > 0) { content.appendChild(navContainer); content.appendChild(logTextBox); updateLogDisplay(); } 
-        else { content.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">Logs disabled for huge counts</div>'; }
-
+        if (allLogs.length > 0) { content.appendChild(navContainer); content.appendChild(logTextBox); updateLogDisplay(); } else { content.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">Logs disabled for huge counts</div>'; }
         header.addEventListener('click', () => { content.classList.toggle('open'); });
         group.appendChild(header); group.appendChild(content); dom.battleLog.appendChild(group);
         if (index === 0) content.classList.add('open');
     });
 }
-
 function renderBattleStats(attacker, statsA, allResults) {
     const container = dom.battleStatList;
     const createCard = (name, color, stats) => {
         let rows = '';
-        for (const [key, val] of Object.entries(stats)) {
-            if (typeof val === 'number') {
-                const displayVal = Number.isInteger(val) ? val : val.toFixed(2);
-                rows += `<div class="stat-row"><span class="stat-name">${key.toUpperCase()}</span><span class="stat-val">${displayVal}</span></div>`;
-            }
-        }
+        for (const [key, val] of Object.entries(stats)) { if (typeof val === 'number') { const displayVal = Number.isInteger(val) ? val : val.toFixed(2); rows += `<div class="stat-row"><span class="stat-name">${key.toUpperCase()}</span><span class="stat-val">${displayVal}</span></div>`; } }
         return `<div class="stat-card" style="border-left-color: ${color}"><div class="stat-card-header">${name}</div><div class="stat-grid">${rows}</div></div>`;
     };
     let html = createCard(attacker.name, attacker.color, statsA);
@@ -652,56 +647,16 @@ function renderBattleStats(attacker, statsA, allResults) {
 Utils.initResizer(document.getElementById('resizerLeft'), document.getElementById('leftSidebar'), 'left', Charts.resizeCharts);
 Utils.initResizer(document.getElementById('resizerRight'), document.getElementById('rightSidebar'), 'right', Charts.resizeCharts);
 Utils.initResizer(document.getElementById('resizerVertical'), document.getElementById('analysisPanel'), 'vertical', Charts.resizeCharts);
-document.body.addEventListener('focusout', (e) => {
-    const target = e.target;
-    if (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'number')) {
-        const val = target.value; if (!val) return;
-        try { new Function('return ' + val.replace(/[a-zA-Z_]\w*/g, '1')); } catch (err) { flashErrorOnLabel(target); }
-    }
-});
-function flashErrorOnLabel(inputElement) {
-    let label = inputElement.previousElementSibling; if (!label || label.tagName !== 'LABEL') { const parent = inputElement.parentElement; if (parent) label = parent.querySelector('label'); }
-    if (label) { const originalText = label.getAttribute('data-original-text') || label.innerText; if (!label.getAttribute('data-original-text')) label.setAttribute('data-original-text', originalText); label.innerText = "⚠ ERR"; label.classList.add('label-error'); setTimeout(() => { label.innerText = originalText; label.classList.remove('label-error'); }, 2000); }
-}
+document.body.addEventListener('focusout', (e) => { const target = e.target; if (target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'number')) { const val = target.value; if (!val) return; try { new Function('return ' + val.replace(/[a-zA-Z_]\w*/g, '1')); } catch (err) { flashErrorOnLabel(target); } } });
+function flashErrorOnLabel(inputElement) { let label = inputElement.previousElementSibling; if (!label || label.tagName !== 'LABEL') { const parent = inputElement.parentElement; if (parent) label = parent.querySelector('label'); } if (label) { const originalText = label.getAttribute('data-original-text') || label.innerText; if (!label.getAttribute('data-original-text')) label.setAttribute('data-original-text', originalText); label.innerText = "⚠ ERR"; label.classList.add('label-error'); setTimeout(() => { label.innerText = originalText; label.classList.remove('label-error'); }, 2000); } }
 
 function initProject() {
     const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
-    const defaultDescriptions = { 
-        hp: "Health Point", 
-        atk: "Base Damage", 
-        def: "Defense", 
-        acc: "Accuracy (명중)",
-        eva: "Evasion (회피)", 
-        cric: "Critical Chance", 
-        crid: "Critical Damage",
-        aspd: "Attack Speed"
-    };
-    const defaultValues = {
-        hp: { b: 200, g: 20 },
-        atk: { b: 20, g: 2 },
-        acc: { b: 95, g: 0 }, 
-        def: { b: 5, g: 0 },
-        aspd: { b: 1.0, g: 0 },
-        eva: { b: 20, g: 1 },
-        cric: { b: 15, g: 0 },
-        crid: { b: 1.5, g: 0 }
-    };
-    
-    // (CP 공식이나 데미지 공식은 취향껏 수정 가능)
-    if (!DM.hasProjectData()) { 
-        DM.setRules({ 
-            stats: defaultStats, 
-            descriptions: defaultDescriptions, 
-            defaultValues: defaultValues,
-            dmgFormula: "atk * (100 / (100 + def))", 
-            hitFormula: "(a.acc - b.eva)",
-            cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" 
-        }); 
-    }
+    const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", acc: "Accuracy (명중)", eva: "Evasion (회피)", cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" };
+    const defaultValues = { hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } };
+    if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, defaultValues: defaultValues, dmgFormula: "atk * (100 / (100 + def))", hitFormula: "(a.acc - b.eva)", cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" }); }
     refreshAll();
 }
-
-// initProject(); // hasProjectData 체크가 있으므로 중복 호출 방지를 위해 필요시 주석처리. 보통은 켜둡니다.
 initProject();
 refreshAll();
 runSimulation();
