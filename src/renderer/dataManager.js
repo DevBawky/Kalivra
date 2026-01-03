@@ -6,7 +6,8 @@ let projectData = {
         description: "",
         version: "1.0.0"
     },
-    snapshots: [], 
+    snapshots: [],
+    itemSets: [], // [NEW] 아이템 세트 저장소
     current: {
         entities: [],
         items: [],
@@ -70,15 +71,37 @@ module.exports = {
         projectData.snapshots.splice(index, 1);
     },
 
+    // [NEW] Item Sets Logic
+    getItemSets: () => projectData.itemSets || [],
+    
+    addItemSet: (name) => {
+        if (!projectData.itemSets) projectData.itemSets = [];
+        const newSet = {
+            id: Date.now(),
+            name: name || `Set ${projectData.itemSets.length + 1}`,
+            items: JSON.parse(JSON.stringify(projectData.current.items)) // 현재 아이템들 복사 저장
+        };
+        projectData.itemSets.push(newSet);
+    },
+
+    deleteItemSet: (index) => {
+        if (projectData.itemSets && index >= 0 && index < projectData.itemSets.length) {
+            projectData.itemSets.splice(index, 1);
+        }
+    },
+
     // [Load / Init]
     loadProject: (data) => {
         if (data.meta && data.current) {
             projectData = data;
+            // 구버전 호환성: itemSets가 없으면 빈 배열 생성
+            if (!projectData.itemSets) projectData.itemSets = [];
         } else {
             projectData.current.entities = data.entities || [];
             projectData.current.items = data.items || [];
             projectData.current.gameRules = data.gameRules || projectData.current.gameRules;
             projectData.snapshots = [];
+            projectData.itemSets = [];
         }
     },
     

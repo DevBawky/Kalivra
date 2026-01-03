@@ -8,9 +8,11 @@ const TRAIT_OPTIONS = {
         { val: 'OnAttackHit', text: 'On Hit (적중 시)' },
         { val: 'OnBeforeAttack', text: 'Before Atk (공격 전)' },
         { val: 'OnDamageTaken', text: 'On Hit Taken (피격 시)' },
+        { val: 'OnEvasion', text: 'On Evasion (회피 성공 시)' }, // [NEW]
+        { val: 'OnCritical', text: 'On Critical (치명타 발동 시)' }, // [NEW]
         { val: 'OnTurnStart', text: 'Turn Start (턴 시작)' },
         { val: 'OnTurnEnd', text: 'Turn End (턴 종료)' },
-        { val: 'OnBattleStart', text: 'Battle Start (전투 시작)' } // [추가됨]
+        { val: 'OnBattleStart', text: 'Battle Start (전투 시작)' }
     ],
     conditions: [
         { val: 'Chance', text: 'Chance (%)' },
@@ -34,14 +36,8 @@ const TRAIT_OPTIONS = {
     ops: [
         { val: 'multiply', text: 'x (Mult)' },
         { val: 'add', text: '+ (Add)' }
-    ],
-    stats: [
-        { val: 'atk', text: 'ATK' },
-        { val: 'def', text: 'DEF' },
-        { val: 'aspd', text: 'ASPD' },
-        { val: 'cric', text: 'CRI.C' },
-        { val: 'eva', text: 'EVA' }
     ]
+    // [REMOVED] stats array is now dynamic
 };
 
 const getSafeVal = (el) => {
@@ -123,10 +119,11 @@ function renderItemCard(item, index, container, callbacks) {
     card.className = 'item-card';
     card.style.opacity = item.active ? '1' : '0.5';
 
-    // 1. Stat Modifiers
+    // 1. Stat Modifiers (여기서도 동적 스탯 사용)
+    const ruleStats = DM.getRules().stats;
     let modHtml = '';
     item.modifiers.forEach((mod, midx) => {
-        let opts = DM.getRules().stats.map(s => `<option value="${s}" ${mod.stat===s?'selected':''}>${s.toUpperCase()}</option>`).join('');
+        let opts = ruleStats.map(s => `<option value="${s}" ${mod.stat===s?'selected':''}>${s.toUpperCase()}</option>`).join('');
         modHtml += `<div class="item-stat-row">
             <select class="dark-select mod-input" data-key="stat" data-idx="${midx}" style="width:70px;">${opts}</select>
             <select class="dark-select mod-input" data-key="op" data-idx="${midx}" style="width:50px;"><option value="add" ${mod.op==='add'?'selected':''}>+</option><option value="mult" ${mod.op==='mult'?'selected':''}>×</option></select>
@@ -142,7 +139,7 @@ function renderItemCard(item, index, container, callbacks) {
             <input type="checkbox" class="target-select" data-ent-id="${ent.id}" ${item.targets.includes(ent.id)?'checked':''}><span>${ent.name}</span></label>`;
     });
 
-    // 3. [UPDATED] Traits Builder
+    // 3. Traits Builder
     if (!item.traits) item.traits = [];
 
     let traitsHtml = '';
@@ -152,16 +149,17 @@ function renderItemCard(item, index, container, callbacks) {
         const effect = (trigger && trigger.effects && trigger.effects[0]) ? trigger.effects[0] : { type: 'Heal', value: 0, target: 'Self' };
 
         const createOpts = (list, selected) => list.map(o => `<option value="${o.val}" ${o.val===selected?'selected':''}>${o.text}</option>`).join('');
+        
+        // [FIX] 스탯 목록 동적 생성
+        const createStatOpts = (selected) => ruleStats.map(s => `<option value="${s}" ${s===selected?'selected':''}>${s.toUpperCase()}</option>`).join('');
 
-        // UI 표시 로직 (Visibility Logic)
+        // UI 표시 로직
         const isModifyDamage = effect.type === 'ModifyDamage';
         const isBuffStat = effect.type === 'BuffStat';
 
         const showOp = isModifyDamage ? 'block' : 'none';
         const showValType = (isModifyDamage || isBuffStat) ? 'none' : 'block';
         const showStat = isBuffStat ? 'block' : 'none';
-        
-        // ▼ [핵심] 지속 턴 UI는 'BuffStat'일 때만 표시
         const showDuration = isBuffStat ? 'block' : 'none';
 
         traitsHtml += `
@@ -192,7 +190,7 @@ function renderItemCard(item, index, container, callbacks) {
                 <input type="number" class="trait-input" data-idx="${tIdx}" data-role="effVal" value="${effect.value}" style="width:50px;" placeholder="Val">
                 
                 <select class="dark-select trait-select" data-idx="${tIdx}" data-role="effStat" style="flex:1; display:${showStat};">
-                    ${createOpts(TRAIT_OPTIONS.stats, effect.stat || 'atk')}
+                    ${createStatOpts(effect.stat || ruleStats[0])}
                 </select>
 
                 <input type="number" class="trait-input" data-idx="${tIdx}" data-role="effDuration" value="${effect.duration || 0}" style="width:60px; display:${showDuration}; border-color:#d29922;" placeholder="Turns (0:∞)" title="Duration in Turns (0 = Infinite)">
@@ -284,15 +282,16 @@ function renderItemCard(item, index, container, callbacks) {
             case 'condVal': cond.value = val; break;
             case 'effType': 
                 eff.type = val; 
-                if(val === 'BuffStat' && !eff.stat) eff.stat = 'atk';
-                callbacks.onUpdate(); // Re-render to show/hide Duration
+                // [FIX] 동적 스탯 리스트 첫 번째 값으로 초기화
+                if(val === 'BuffStat' && !eff.stat) eff.stat = DM.getRules().stats[0];
+                callbacks.onUpdate();
                 return;
             case 'effTarget': eff.target = val; break;
             case 'effVal': eff.value = val; break;
             case 'effValType': eff.valueType = val; break;
             case 'effOp': eff.op = val; break;
             case 'effStat': eff.stat = val; break;
-            case 'effDuration': eff.duration = val; break; // [NEW] Duration 저장
+            case 'effDuration': eff.duration = val; break;
         }
         callbacks.onInput();
     };

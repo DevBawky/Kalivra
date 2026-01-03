@@ -18,17 +18,12 @@ function processBuffDurations(actor, turn, addLogFunc) {
 }
 
 /**
- * 단일 전투 시뮬레이션 (통계 추적 강화판)
+ * 단일 전투 시뮬레이션 (Chance Condition Fix)
  */
 function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = false) {
-    // 1. 전투 객체 초기화 (통계용 statsTracker 추가)
     const initFighter = (ent, stats) => ({
         ...ent, currentStats: { ...stats }, currentHp: stats.hp || 100, traits: ent.traits || [], activeBuffs: [],
-        // [NEW] 전투 내 통계 추적용
-        tracker: { 
-            attacks: 0, crits: 0, hits: 0, misses: 0, 
-            damageDealt: 0, overkill: 0 
-        }
+        tracker: { attacks: 0, crits: 0, hits: 0, misses: 0, damageDealt: 0, overkill: 0 }
     });
 
     const fighterA = initFighter(entA, statsA);
@@ -51,66 +46,112 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
     // [Core] Trigger Engine
     // ==========================================
     const BattleSystem = {
-        processTriggers: (triggerName, context) => {
-            const actor = context.actor;
-            if (!actor.traits || actor.traits.length === 0) return;
-            actor.traits.forEach(trait => {
+        normalizeString: (str) => {
+            if (!str) return "";
+            const s = str.toLowerCase().replace(/\s+/g, ""); 
+            
+            // Trigger Mappings
+            if (s.includes("onhittaken") || s.includes("ondamagetaken") || s.includes("피격")) return "OnHitTaken";
+            if (s.includes("onattackhit") || s.includes("적중")) return "OnAttackHit";
+            if (s.includes("onbeforeattack") || s.includes("공격전")) return "OnBeforeAttack";
+            if (s.includes("onmiss") || s.includes("빗나감")) return "OnMiss";
+            if (s.includes("onevasion") || s.includes("회피")) return "OnEvasion";
+            if (s.includes("oncritical") || s.includes("치명타")) return "OnCritical";
+            if (s.includes("onturnstart")) return "OnTurnStart";
+            if (s.includes("onturnend")) return "OnTurnEnd";
+            if (s.includes("onbattlestart")) return "OnBattleStart";
+            
+            // Effect & Value Type Mappings
+            if (s.includes("heal")) return "Heal";
+            if (s.includes("modifydamage")) return "ModifyDamage";
+            if (s.includes("dealdamage")) return "DealDamage";
+            if (s.includes("buff")) return "BuffStat";
+            if (s.includes("percent") || s.includes("%")) return "PercentOfDamage";
+
+            // [FIX] Condition Type Mappings (여기가 빠져서 버그 발생)
+            if (s.includes("chance")) return "chance";
+            if (s.includes("hp") && s.includes("less")) return "hplessthen";
+            if (s.includes("always")) return "always";
+            
+            return str;
+        },
+
+        processTriggers: (triggerName, owner, context, allowedTypes = null) => {
+            if (!owner.traits || owner.traits.length === 0) return;
+
+            owner.traits.forEach(trait => {
                 if (!trait.triggers) return;
-                trait.triggers.filter(t => t.type === triggerName).forEach(trig => {
-                    if (BattleSystem.checkConditions(trig.conditions, context)) {
-                        BattleSystem.applyEffects(trig.effects, context, trait.name);
+                trait.triggers.filter(t => BattleSystem.normalizeString(t.type) === triggerName).forEach(trig => {
+                    if (BattleSystem.checkConditions(trig.conditions, owner, context)) {
+                        BattleSystem.applyEffects(trig.effects, owner, context, trait.name, allowedTypes);
                     }
                 });
             });
         },
-        checkConditions: (conditions, context) => {
+
+        checkConditions: (conditions, owner, context) => {
             if (!conditions || conditions.length === 0) return true;
             return conditions.every(cond => {
-                switch (cond.type) {
-                    case "Chance": return Math.random() * 100 < cond.value;
-                    case "HpLessThen": 
-                        const target = cond.target === "Self" ? context.actor : context.target;
-                        if (!target) return false;
-                        return (target.currentHp / target.currentStats.hp) * 100 <= cond.value;
-                    default: return true;
+                const type = BattleSystem.normalizeString(cond.type);
+                switch (type) {
+                    case "chance": return Math.random() * 100 < cond.value;
+                    case "hplessthen": 
+                        const hpTarget = cond.target === "Self" ? owner : (owner === context.actor ? context.target : context.actor);
+                        if (!hpTarget) return false;
+                        return (hpTarget.currentHp / hpTarget.currentStats.hp) * 100 <= cond.value;
+                    case "iscritical": return !!context.isCrit;
+                    case "always": return true;
+                    default: return true; // 알 수 없는 조건은 true 처리 (기존 동작)
                 }
             });
         },
-        applyEffects: (effects, context, sourceName) => {
+
+        applyEffects: (effects, owner, context, sourceName, allowedTypes) => {
             effects.forEach(eff => {
-                switch (eff.type) {
+                const type = BattleSystem.normalizeString(eff.type);
+                if (allowedTypes && !allowedTypes.includes(type)) return;
+
+                const effTarget = eff.target === "Self" ? owner : (owner === context.actor ? context.target : context.actor);
+                if (!effTarget) return;
+
+                const valType = BattleSystem.normalizeString(eff.valueType);
+
+                switch (type) {
                     case "Heal":
-                        const healTarget = eff.target === "Self" ? context.actor : context.target;
-                        if (!healTarget) return;
-                        let healAmount = eff.valueType === "PercentOfDamage" ? context.damage * (eff.value / 100) : eff.value;
+                        let healAmount = valType === "PercentOfDamage" 
+                            ? (context.damage || 0) * (eff.value / 100) 
+                            : eff.value;
                         healAmount = Math.floor(healAmount);
                         if (healAmount > 0) {
-                            healTarget.currentHp = Math.min(healTarget.currentHp + healAmount, healTarget.currentStats.hp);
-                            addLog(turn, context.actor, healTarget, 'heal', healAmount, `[${sourceName}] Healed ${healAmount} HP`);
+                            effTarget.currentHp = Math.min(effTarget.currentHp + healAmount, effTarget.currentStats.hp);
+                            addLog(turn, owner, effTarget, 'heal', healAmount, `[${sourceName}] Healed ${healAmount} HP`);
                         }
                         break;
+
                     case "ModifyDamage":
-                        if (eff.op === "multiply") context.damageMultiplier *= eff.value;
-                        else if (eff.op === "add") context.damageBonus += eff.value;
+                        if (context.damageMultiplier !== undefined) {
+                            if (eff.op === "multiply") context.damageMultiplier *= eff.value;
+                            else if (eff.op === "add") context.damageBonus += eff.value;
+                        }
                         break;
-                    case "DealDamage": // 추가타 (통계 집계 제외: 보통 메인 공격만 치명타/회피 집계함)
-                        const dmgTarget = eff.target === "Self" ? context.actor : context.target;
-                        if (!dmgTarget) return;
-                        let dmgVal = eff.valueType === "PercentOfDamage" ? context.damage * (eff.value / 100) : eff.value;
+
+                    case "DealDamage": 
+                        let dmgVal = valType === "PercentOfDamage" 
+                            ? (context.damage || 0) * (eff.value / 100) 
+                            : eff.value;
                         dmgVal = Math.floor(dmgVal);
                         if (dmgVal > 0) {
-                            dmgTarget.currentHp -= dmgVal;
-                            addLog(turn, context.actor, dmgTarget, 'attack', dmgVal, `[${sourceName}] deals extra damage`);
+                            effTarget.currentHp -= dmgVal;
+                            addLog(turn, owner, effTarget, 'attack', dmgVal, `[${sourceName}] deals extra damage`);
                         }
                         break;
+
                     case "BuffStat":
-                        const buffTarget = eff.target === "Self" ? context.actor : context.target;
-                        if (!buffTarget) return;
-                        if (!buffTarget.currentStats[eff.stat]) buffTarget.currentStats[eff.stat] = 0;
-                        buffTarget.currentStats[eff.stat] += eff.value;
-                        addLog(turn, context.actor, buffTarget, 'buff', eff.value, `[${sourceName}] ${eff.stat.toUpperCase()} Up`);
+                        if (!effTarget.currentStats[eff.stat]) effTarget.currentStats[eff.stat] = 0;
+                        effTarget.currentStats[eff.stat] += eff.value;
+                        addLog(turn, owner, effTarget, 'buff', eff.value, `[${sourceName}] ${eff.stat.toUpperCase()} ${eff.value>0?'+':''}${eff.value}`);
                         if (eff.duration && eff.duration > 0) {
-                            buffTarget.activeBuffs.push({ stat: eff.stat, val: eff.value, duration: eff.duration, source: sourceName });
+                            effTarget.activeBuffs.push({ stat: eff.stat, val: eff.value, duration: eff.duration, source: sourceName });
                         }
                         break;
                 }
@@ -119,102 +160,102 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
     };
 
     // ==========================================
-    // 공격 처리 (통계 집계 포함)
+    // 공격 처리
     // ==========================================
     const processAttack = (attacker, defender) => {
         const aStats = attacker.currentStats;
         const bStats = defender.currentStats;
-
-        // [Stats] 공격 시도 횟수 증가
         attacker.tracker.attacks++;
 
-        // 1. 회피(EVA) 체크
+        let context = { 
+            actor: attacker, target: defender, 
+            damage: 0, damageMultiplier: 1.0, damageBonus: 0, 
+            isCrit: false 
+        };
+
+        BattleSystem.processTriggers("OnBeforeAttack", attacker, context);
+
         const evaChance = bStats.eva || 0; 
         if (Math.random() * 100 < evaChance) {
             addLog(turn, attacker, defender, 'miss', 0, 'Missed! (Dodged)');
-            attacker.tracker.misses++; // [Stats] 빗나감(상대 회피) 증가
+            attacker.tracker.misses++; 
+            BattleSystem.processTriggers("OnMiss", attacker, context);
+            BattleSystem.processTriggers("OnEvasion", defender, context);
             return;
         }
 
-        let context = { actor: attacker, target: defender, damage: 0, damageMultiplier: 1.0, damageBonus: 0 };
-        BattleSystem.processTriggers("OnBeforeAttack", context);
-
         let rawDmg = 0;
         try { rawDmg = Sim.calculateValue(dmgFormula, { a: aStats, b: bStats }); } 
-        catch (e) { addLog(turn, attacker, defender, 'error', 0, `Error: ${e.message}`); }
+        catch (e) { rawDmg = 0; }
 
         const variance = attacker.variance || 0;
         if (variance > 0) rawDmg *= (1 + (Math.random() * variance * 2 - variance));
 
         const criChance = aStats.cric !== undefined ? aStats.cric : (aStats.cri || 0);
-        let isCritical = false;
         if (Math.random() * 100 < criChance) {
-            isCritical = true;
+            context.isCrit = true;
             rawDmg *= (aStats.crid || 1.5);
-            attacker.tracker.crits++; // [Stats] 치명타 증가
+            attacker.tracker.crits++;
         }
+
+        // [Phase 1] 데미지 계산 전
+        context.damage = Math.floor(rawDmg);
+        BattleSystem.processTriggers("OnHitTaken", defender, context, ["ModifyDamage", "BuffStat"]);
 
         rawDmg = (rawDmg * context.damageMultiplier) + context.damageBonus;
         let finalDmg = Math.floor(rawDmg);
         if (finalDmg < 0) finalDmg = 0;
-
-        // 실제 데미지 적용
-        defender.currentHp -= finalDmg;
         context.damage = finalDmg;
-        
-        // [Stats] 데미지 집계
+
+        defender.currentHp -= finalDmg;
         attacker.tracker.damageDealt += finalDmg;
         attacker.tracker.hits++;
 
         let msg = `deals ${finalDmg} damage`;
-        if (isCritical) msg += " (Critical!)";
+        if (context.isCrit) msg += " (Critical!)";
         addLog(turn, attacker, defender, 'attack', finalDmg, msg);
 
-        BattleSystem.processTriggers("OnAttackHit", context);
+        // [Phase 2] 데미지 적용 후
+        BattleSystem.processTriggers("OnHitTaken", defender, context, ["Heal", "DealDamage", "BuffStat"]);
+
+        BattleSystem.processTriggers("OnAttackHit", attacker, context);
+
+        if (context.isCrit) {
+            BattleSystem.processTriggers("OnCritical", attacker, context);
+        }
     };
 
-    // ==========================================
-    // 메인 전투 루프
-    // ==========================================
-    // 선공 결정
+    // Main Loop
     const aspdA = fighterA.currentStats.aspd || 1;
     const aspdB = fighterB.currentStats.aspd || 1;
     const totalSpeed = aspdA + aspdB;
     const chanceA = totalSpeed > 0 ? (aspdA / totalSpeed) : 0.5;
     
-    // 이번 전투의 선공자 기록 (통계용)
     const isPlayerFirst = Math.random() < chanceA;
     let first = isPlayerFirst ? fighterA : fighterB;
     let second = isPlayerFirst ? fighterB : fighterA;
 
-    // 전투 시작 훅
-    BattleSystem.processTriggers("OnBattleStart", { actor: first, target: second });
-    BattleSystem.processTriggers("OnBattleStart", { actor: second, target: first });
+    BattleSystem.processTriggers("OnBattleStart", first, { actor: first, target: second });
+    BattleSystem.processTriggers("OnBattleStart", second, { actor: second, target: first });
 
     while (turn < MAX_TURNS && fighterA.currentHp > 0 && fighterB.currentHp > 0) {
         turn++;
-        
-        // 1. 선공
+        BattleSystem.processTriggers("OnTurnStart", first, { actor: first, target: second, turn });
+        BattleSystem.processTriggers("OnTurnStart", second, { actor: second, target: first, turn });
+
         processAttack(first, second);
         processBuffDurations(first, turn, addLog);
-        if (second.currentHp <= 0) { 
-            winner = first; 
-            addLog(turn, second, null, 'die', 0, 'collapsed!'); 
-            break; 
-        }
+        if (second.currentHp <= 0) { winner = first; addLog(turn, second, null, 'die', 0, 'collapsed!'); break; }
 
-        // 2. 후공
         processAttack(second, first);
         processBuffDurations(second, turn, addLog);
-        if (first.currentHp <= 0) { 
-            winner = second; 
-            addLog(turn, first, null, 'die', 0, 'collapsed!'); 
-            break; 
-        }
-    }
-    if (!winner) addLog(turn, null, null, 'end', 0, 'Draw');
+        if (first.currentHp <= 0) { winner = second; addLog(turn, first, null, 'die', 0, 'collapsed!'); break; }
 
-    // [Stats] 오버킬 계산 (승리한 경우, 패자의 마이너스 체력)
+        BattleSystem.processTriggers("OnTurnEnd", first, { actor: first, target: second, turn });
+        BattleSystem.processTriggers("OnTurnEnd", second, { actor: second, target: first, turn });
+    }
+
+    if (!winner) addLog(turn, null, null, 'end', 0, 'Draw');
     if (winner) {
         const loser = winner === fighterA ? fighterB : fighterA;
         if (loser.currentHp < 0) winner.tracker.overkill = Math.abs(loser.currentHp);
@@ -225,19 +266,14 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         winnerHp: winner ? winner.currentHp : 0,
         turns: turn,
         logs: logs,
-        // 통계 데이터 반환
         isPlayerFirst: isPlayerFirst,
         statsA: fighterA.tracker,
         statsB: fighterB.tracker
     };
 }
 
-// 배치 실행 (기존)
 function runBattleBatch(entA, statsA, entB, statsB, count, dmgFormula) {
-    let winsA = 0;
-    let totalTurns = 0;
-    let allLogs = []; 
-    const LOG_LIMIT = 100;
+    let winsA = 0; let totalTurns = 0; let allLogs = []; const LOG_LIMIT = 100;
     for (let i = 0; i < count; i++) {
         const shouldRecord = (i < LOG_LIMIT);
         const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, shouldRecord);
@@ -245,98 +281,31 @@ function runBattleBatch(entA, statsA, entB, statsB, count, dmgFormula) {
         if (result.winnerId === entA.id) winsA++;
         totalTurns += result.turns;
     }
-    return {
-        opponentName: entB.name,
-        winRate: (winsA / count) * 100,
-        avgTurns: totalTurns / count,
-        allLogs: allLogs 
-    };
+    return { opponentName: entB.name, winRate: (winsA / count) * 100, avgTurns: totalTurns / count, allLogs: allLogs };
 }
 
-// [New] 몬테카를로 분석 (심층 통계 집계)
 function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula) {
-    let winsA = 0;
-    let totalTurns = 0;
-    
-    // 심층 통계 변수들
-    let winsWhenFirst = 0;
-    let totalFirst = 0;
-    
-    let totalAttacksA = 0;
-    let totalCritsA = 0;
-    let totalDefensesA = 0; // A가 맞은 횟수 (B의 공격 횟수)
-    let totalDodgesA = 0;   // A가 회피한 횟수 (B의 미스 횟수)
-    let totalDamageA = 0;
-    let totalOverkillA = 0;
-
-    // 분포 데이터
-    const turnDist = {}; 
-    const winHpDistA = []; 
-    const winHpDistB = []; 
+    let winsA = 0; let totalTurns = 0; let winsWhenFirst = 0; let totalFirst = 0;
+    let totalAttacksA = 0; let totalCritsA = 0; let totalDefensesA = 0; let totalDodgesA = 0;   
+    let totalDamageA = 0; let totalOverkillA = 0;
+    const turnDist = {}; const winHpDistA = []; const winHpDistB = []; 
 
     for (let i = 0; i < count; i++) {
         const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, false);
-        
-        // 1. 선공 통계
-        if (result.isPlayerFirst) {
-            totalFirst++;
-            if (result.winnerId === entA.id) winsWhenFirst++;
-        }
-
-        // 2. 전투 통계 누적 (승패 무관하게 누적하여 '평균 퍼포먼스' 측정)
-        totalAttacksA += result.statsA.attacks;
-        totalCritsA   += result.statsA.crits;
-        totalDamageA  += result.statsA.damageDealt;
-        
-        // A의 방어 통계 (B가 공격한 횟수 중 미스 난 것)
-        totalDefensesA += result.statsB.attacks; 
-        totalDodgesA   += result.statsB.misses;
-
-        // 3. 승패 관련 통계
-        if (result.winnerId === entA.id) {
-            winsA++;
-            totalOverkillA += result.statsA.overkill;
-            winHpDistA.push(result.winnerHp);
-        } else if (result.winnerId === entB.id) {
-            winHpDistB.push(result.winnerHp);
-        }
-        
-        const t = result.turns;
-        turnDist[t] = (turnDist[t] || 0) + 1;
-        totalTurns += t;
+        if (result.isPlayerFirst) { totalFirst++; if (result.winnerId === entA.id) winsWhenFirst++; }
+        totalAttacksA += result.statsA.attacks; totalCritsA += result.statsA.crits;
+        totalDamageA += result.statsA.damageDealt; totalDefensesA += result.statsB.attacks; totalDodgesA += result.statsB.misses;
+        if (result.winnerId === entA.id) { winsA++; totalOverkillA += result.statsA.overkill; winHpDistA.push(result.winnerHp); } 
+        else if (result.winnerId === entB.id) { winHpDistB.push(result.winnerHp); }
+        const t = result.turns; turnDist[t] = (turnDist[t] || 0) + 1; totalTurns += t;
     }
-
-    // 계산
-    const winRate = (winsA / count) * 100;
-    const avgTurns = totalTurns / count;
-    
-    // 선공 승률 (선공 잡은 판이 없으면 0)
-    const firstTurnWinRate = totalFirst > 0 ? (winsWhenFirst / totalFirst * 100) : 0;
-    
-    // 실제 확률 (Realized RNG)
-    const realizedCritRate = totalAttacksA > 0 ? (totalCritsA / totalAttacksA * 100) : 0;
-    const realizedDodgeRate = totalDefensesA > 0 ? (totalDodgesA / totalDefensesA * 100) : 0;
-    
-    // DPT (데미지 / 턴) - 여기서는 '라운드(Turn)' 기준
-    const avgDpt = totalTurns > 0 ? (totalDamageA / totalTurns) : 0;
-    
-    // 평균 오버킬 (승리한 판 기준)
-    const avgOverkill = winsA > 0 ? (totalOverkillA / winsA) : 0;
-
-    return {
-        count,
-        winsA,
-        winRate,
-        avgTurns,
-        turnDist,
-        winHpDistA,
-        winHpDistB,
-        // [New Metrics]
-        firstTurnWinRate,
-        realizedCritRate,
-        realizedDodgeRate,
-        avgDpt,
-        avgOverkill
+    return { 
+        count, winsA, winRate: (winsA/count)*100, avgTurns: totalTurns/count, turnDist, winHpDistA, winHpDistB, 
+        firstTurnWinRate: totalFirst > 0 ? (winsWhenFirst/totalFirst*100) : 0, 
+        realizedCritRate: totalAttacksA > 0 ? (totalCritsA/totalAttacksA*100) : 0, 
+        realizedDodgeRate: totalDefensesA > 0 ? (totalDodgesA/totalDefensesA*100) : 0, 
+        avgDpt: totalTurns > 0 ? (totalDamageA/totalTurns) : 0, 
+        avgOverkill: winsA > 0 ? (totalOverkillA/winsA) : 0 
     };
 }
 

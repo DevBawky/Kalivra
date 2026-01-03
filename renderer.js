@@ -22,12 +22,20 @@ const detailModal = document.getElementById('detailModal');
 const btnDetail = document.getElementById('btnDetail');
 const closeDetail = document.querySelector('.close-detail');
 
-// [NEW] League Elements
+// League Elements
 const leagueModal = document.getElementById('leagueModal');
 const btnLeague = document.getElementById('openLeagueBtn');
 const closeLeague = document.querySelector('.close-league');
 const btnRunLeague = document.getElementById('runLeagueBtn');
 const leagueContainer = document.getElementById('leagueContainer');
+
+// [NEW] Item Set Elements
+const itemSetModal = document.getElementById('itemSetModal');
+// HTML에 <button id="btnItemSet">Sets</button> 가 있다고 가정
+const btnItemSet = document.getElementById('btnItemSet'); 
+const closeItemSet = document.querySelector('.close-itemset');
+const saveItemSetBtn = document.getElementById('saveItemSetBtn');
+const itemSetList = document.getElementById('itemSetList');
 
 // --- Window Controls & Utilities ---
 const originalAlert = window.alert;
@@ -57,6 +65,24 @@ class RemoveEntityCommand { constructor(i){this.i=i;this.rm=null;} execute(){thi
 class AddEntityCommand { constructor(d){this.d=d;} execute(){DM.addEntity(this.d);refreshAll();runSimulation();} undo(){DM.removeEntity(DM.getEntities().length-1);refreshAll();runSimulation();} }
 class RemoveItemCommand { constructor(i){this.i=i;this.rm=null;} execute(){this.rm=DM.getItems()[this.i];DM.getItems().splice(this.i,1);refreshAll();runSimulation();} undo(){DM.getItems().splice(this.i,0,this.rm);refreshAll();runSimulation();} }
 class AddItemCommand { constructor(d){this.d=d;} execute(){DM.addItem(this.d);refreshAll();runSimulation();} undo(){DM.getItems().pop();refreshAll();runSimulation();} }
+
+// [NEW] Command for Loading Item Set (Undoable)
+class LoadItemSetCommand {
+    constructor(newItems) {
+        this.newItems = JSON.parse(JSON.stringify(newItems)); // Deep Copy
+        this.oldItems = JSON.parse(JSON.stringify(DM.getItems())); // Backup
+    }
+    execute() {
+        DM.setItems(this.newItems);
+        refreshAll();
+        runSimulation();
+    }
+    undo() {
+        DM.setItems(this.oldItems);
+        refreshAll();
+        runSimulation();
+    }
+}
 
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (undoStack.length > 0) { const cmd = undoStack.pop(); cmd.undo(); redoStack.push(cmd); } }
@@ -127,7 +153,7 @@ function runSimulation() {
 }
 
 // ==========================================
-// 3. Config, Snapshots
+// 3. Config, Snapshots, & Item Sets
 // ==========================================
 const configModal = document.getElementById('configModal');
 document.getElementById('configBtn').addEventListener('click', () => {
@@ -140,7 +166,6 @@ document.getElementById('configBtn').addEventListener('click', () => {
     document.getElementById('statDefinitions').value = rules.stats.join(', ');
     let descText = ""; if (rules.descriptions) descText = Object.entries(rules.descriptions).map(([k, v]) => `${k}: ${v}`).join('\n');
     document.getElementById('statDescInput').value = descText;
-    document.getElementById('dmgFormula').classList.remove('input-error'); document.getElementById('cpFormula').classList.remove('input-error');
     configModal.style.display = 'flex';
 });
 document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
@@ -184,6 +209,57 @@ function renderSnapshots() {
 document.getElementById('snapshotBtn').addEventListener('click', () => { renderSnapshots(); snapshotModal.style.display = 'flex'; });
 document.querySelector('.close-snapshot').addEventListener('click', () => snapshotModal.style.display = 'none');
 document.getElementById('createSnapshotBtn').addEventListener('click', () => { const name = document.getElementById('newSnapshotName').value.trim(); DM.createSnapshot(name); document.getElementById('newSnapshotName').value=''; renderSnapshots(); });
+
+// [NEW] Item Set Logic
+function renderItemSets() {
+    const sets = DM.getItemSets();
+    itemSetList.innerHTML = '';
+    if (sets.length === 0) {
+        itemSetList.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No saved sets.</div>';
+        return;
+    }
+    sets.forEach((set, idx) => {
+        const el = document.createElement('div');
+        el.className = 'snapshot-item'; // Reuse snapshot style
+        el.innerHTML = `
+            <div class="snapshot-info">
+                <span class="snapshot-name">${set.name}</span>
+                <span style="font-size:0.8em; color:#777;">${set.items.length} items</span>
+            </div>
+            <div class="snapshot-actions">
+                <button class="load-btn">Load</button>
+                <button class="del-btn">✕</button>
+            </div>
+        `;
+        el.querySelector('.load-btn').addEventListener('click', () => {
+            if(confirm(`Replace current items with "${set.name}"?`)) {
+                executeCommand(new LoadItemSetCommand(set.items));
+                itemSetModal.style.display = 'none';
+            }
+        });
+        el.querySelector('.del-btn').addEventListener('click', () => {
+            if(confirm('Delete this set?')) {
+                DM.deleteItemSet(idx);
+                renderItemSets();
+            }
+        });
+        itemSetList.appendChild(el);
+    });
+}
+
+if(btnItemSet) btnItemSet.addEventListener('click', () => { renderItemSets(); itemSetModal.style.display = 'flex'; });
+if(closeItemSet) closeItemSet.addEventListener('click', () => itemSetModal.style.display = 'none');
+// renderer.js 하단부 (saveItemSetBtn 이벤트 리스너 교체)
+
+if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => {
+    const name = document.getElementById('newItemSetName').value.trim();
+    if(!name) return alert("Please enter a name.");
+    DM.addItemSet(name);
+    document.getElementById('newItemSetName').value = '';
+    renderItemSets();
+    ipcRenderer.send('save-kal', DM.getProjectData());
+});
+
 
 document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', DM.getProjectData()));
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
@@ -269,14 +345,16 @@ function runDetailAnalysis(idA, idB, lv) {
     } catch (e) { return alert(e.message); }
 
     detailModal.style.display = 'flex';
-    detailModal.style.zIndex = "9999";
-    
-    document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
+    // [FIX] MC창 최상단 노출
+    detailModal.style.zIndex = "9999"; 
 
-    const titleEl = document.getElementById('detailTitle');
+    // [FIX] 타이틀 텍스트 변경
+    const titleEl = document.getElementById('detailTitle') || document.querySelector('#detailModal h2');
     if (titleEl) {
         titleEl.innerText = `${entA.name} vs ${entB.name}`;
     }
+
+    document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
 
     setTimeout(() => {
         const startTime = performance.now();
@@ -291,7 +369,7 @@ function runDetailAnalysis(idA, idB, lv) {
 
         const fwr = result.firstTurnWinRate.toFixed(1);
         const fwrColor = result.firstTurnWinRate > 60 ? '#e74c3c' : (result.firstTurnWinRate < 40 ? '#e74c3c' : '#2da44e');
-
+        
         document.getElementById('detailStats').innerHTML = `
             <style>
                 .stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; }
@@ -326,7 +404,6 @@ if(closeDetail) closeDetail.addEventListener('click', () => detailModal.style.di
 // [NEW] League Matrix Logic
 if (btnLeague) {
     btnLeague.addEventListener('click', () => {
-        // Init League Modal Level from main or previous logic
         document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value;
         leagueModal.style.display = 'flex';
     });
@@ -341,9 +418,8 @@ if (btnRunLeague) {
 
         leagueContainer.innerHTML = '<div style="color:#fee75c;">Simulating League... This may take a moment.</div>';
 
-        // Use setTimeout to allow UI update
         setTimeout(() => {
-            const count = 100; // Fixed 100 runs for speed
+            const count = 100; // Fixed 100 runs
             const size = entities.length;
             const matrix = [];
 
@@ -352,7 +428,6 @@ if (btnRunLeague) {
                 const row = [];
                 const entA = entities[i];
                 
-                // Prepare A
                 const statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules());
                 const itemsA = DM.getItems().filter(item => item.active && item.targets.includes(entA.id));
                 const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(it=>it.traits||[])] };
@@ -360,11 +435,10 @@ if (btnRunLeague) {
                 for (let j = 0; j < size; j++) {
                     const entB = entities[j];
                     if (i === j) {
-                        row.push(null); // Self vs Self
+                        row.push(null); 
                         continue;
                     }
 
-                    // Prepare B
                     const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
                     const itemsB = DM.getItems().filter(item => item.active && item.targets.includes(entB.id));
                     const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(it=>it.traits||[])] };
@@ -376,8 +450,7 @@ if (btnRunLeague) {
             }
 
             // 2. Render Grid
-            // CSS Grid Setup
-            const totalCols = size + 1; // 1 for header column
+            const totalCols = size + 1;
             leagueContainer.innerHTML = '';
             
             const grid = document.createElement('div');
@@ -385,7 +458,6 @@ if (btnRunLeague) {
             grid.style.gridTemplateColumns = `120px repeat(${size}, 60px)`;
             grid.style.gridTemplateRows = `40px repeat(${size}, 40px)`;
 
-            // (0,0) Empty
             const emptyCorner = document.createElement('div');
             emptyCorner.className = 'matrix-header matrix-row-header matrix-col-header';
             emptyCorner.innerText = "ATK \\ DEF";
@@ -398,19 +470,19 @@ if (btnRunLeague) {
                 h.innerText = ent.name;
                 h.style.color = ent.color;
                 h.style.writingMode = 'vertical';
+                // [FIX] 상단 이름 정방향 출력 (rotate 제거)
+                // h.style.transform = 'rotate(180deg)'; 
                 grid.appendChild(h);
             });
 
             // Rows
             for (let i = 0; i < size; i++) {
-                // Row Header (Attacker)
                 const h = document.createElement('div');
                 h.className = 'matrix-header matrix-row-header';
                 h.innerText = entities[i].name;
                 h.style.color = entities[i].color;
                 grid.appendChild(h);
 
-                // Cells
                 for (let j = 0; j < size; j++) {
                     const cell = document.createElement('div');
                     cell.className = 'matrix-cell';
@@ -420,14 +492,11 @@ if (btnRunLeague) {
                         cell.style.backgroundColor = '#222';
                         cell.innerText = '-';
                     } else {
-                        // Color coding
-                        if (winRate > 60) cell.style.backgroundColor = 'rgba(45, 164, 78, 0.6)'; // Green
-                        else if (winRate < 40) cell.style.backgroundColor = 'rgba(231, 76, 60, 0.6)'; // Red
-                        else cell.style.backgroundColor = 'rgba(210, 153, 34, 0.6)'; // Yellow
+                        if (winRate > 60) cell.style.backgroundColor = 'rgba(45, 164, 78, 0.6)'; 
+                        else if (winRate < 40) cell.style.backgroundColor = 'rgba(231, 76, 60, 0.6)'; 
+                        else cell.style.backgroundColor = 'rgba(210, 153, 34, 0.6)'; 
 
                         cell.innerText = Math.round(winRate) + '%';
-                        
-                        // Interaction: Click to M.C detail
                         cell.addEventListener('click', () => {
                             runDetailAnalysis(entities[i].id, entities[j].id, lv);
                         });
@@ -548,6 +617,7 @@ function initProject() {
     if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, dmgFormula: "atk * (100 / (100 + def))", cpFormula: "hp * 0.5 + atk * 2 + def + aspd * 5" }); }
     refreshAll();
 }
+// initProject(); // hasProjectData 체크가 있으므로 중복 호출 방지를 위해 필요시 주석처리. 보통은 켜둡니다.
 initProject();
 refreshAll();
 runSimulation();
