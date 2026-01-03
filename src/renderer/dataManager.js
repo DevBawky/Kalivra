@@ -1,4 +1,4 @@
-// 전체 프로젝트 데이터 구조
+// 전체 프로젝트 데이터 구조 (기존 유지)
 let projectData = {
     meta: {
         projectName: "Untitled Project",
@@ -7,15 +7,35 @@ let projectData = {
         version: "1.0.0"
     },
     snapshots: [],
-    itemSets: [], // [NEW] 아이템 세트 저장소
+    itemSets: [], 
     current: {
         entities: [],
         items: [],
         gameRules: {
-            stats: ['hp', 'atk', 'def', 'cric', 'crid', 'aspd', 'eva'],
-            descriptions: {},
+            stats: ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'],
+            defaultValues: {
+                hp: { b: 200, g: 20 },
+                atk: { b: 20, g: 2 },
+                acc: { b: 95, g: 0 }, 
+                def: { b: 5, g: 0 },
+                aspd: { b: 1.0, g: 0 },
+                eva: { b: 20, g: 1 },
+                cric: { b: 15, g: 0 },
+                crid: { b: 1.5, g: 0 }
+            },
+            descriptions: {
+                hp: "Health Point", 
+                atk: "Base Damage", 
+                def: "Defense", 
+                acc: "Accuracy (명중)",
+                eva: "Evasion (회피)", 
+                cric: "Critical Chance", 
+                crid: "Critical Damage",
+                aspd: "Attack Speed"
+            },
             dmgFormula: 'a.atk * (100 / (100 + b.def))',
-            cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + eva * 2'
+            hitFormula: "(a.acc - b.eva)",
+            cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + acc + eva * 2'
         }
     }
 };
@@ -36,29 +56,24 @@ class DeleteItemCommand {
 const commandManager = new CommandManager();
 
 module.exports = {
-    // 현재 작업중인 데이터 반환
+    // 기존 Getter/Setter (유지)
     getEntities: () => projectData.current.entities,
     getItems: () => projectData.current.items,
     getRules: () => projectData.current.gameRules,
-    
-    // [Meta & Snapshot]
     getMeta: () => projectData.meta,
     setMeta: (newMeta) => { projectData.meta = { ...projectData.meta, ...newMeta }; },
-    
     getSnapshots: () => projectData.snapshots,
     
-    // 스냅샷 생성
     createSnapshot: (name) => {
         const snapshot = {
             id: Date.now(),
             name: name || `Snapshot ${projectData.snapshots.length + 1}`,
             date: new Date().toISOString(),
-            data: JSON.parse(JSON.stringify(projectData.current)) // Deep Copy
+            data: JSON.parse(JSON.stringify(projectData.current)) 
         };
         projectData.snapshots.push(snapshot);
     },
     
-    // 스냅샷 불러오기
     loadSnapshot: (index) => {
         if (index >= 0 && index < projectData.snapshots.length) {
             projectData.current = JSON.parse(JSON.stringify(projectData.snapshots[index].data));
@@ -67,11 +82,8 @@ module.exports = {
         }
     },
 
-    deleteSnapshot: (index) => {
-        projectData.snapshots.splice(index, 1);
-    },
+    deleteSnapshot: (index) => { projectData.snapshots.splice(index, 1); },
 
-    // [NEW] Item Sets Logic
     getItemSets: () => projectData.itemSets || [],
     
     addItemSet: (name) => {
@@ -79,7 +91,7 @@ module.exports = {
         const newSet = {
             id: Date.now(),
             name: name || `Set ${projectData.itemSets.length + 1}`,
-            items: JSON.parse(JSON.stringify(projectData.current.items)) // 현재 아이템들 복사 저장
+            items: JSON.parse(JSON.stringify(projectData.current.items)) 
         };
         projectData.itemSets.push(newSet);
     },
@@ -90,11 +102,9 @@ module.exports = {
         }
     },
 
-    // [Load / Init]
     loadProject: (data) => {
         if (data.meta && data.current) {
             projectData = data;
-            // 구버전 호환성: itemSets가 없으면 빈 배열 생성
             if (!projectData.itemSets) projectData.itemSets = [];
         } else {
             projectData.current.entities = data.entities || [];
@@ -111,7 +121,6 @@ module.exports = {
     setItems: (data) => { projectData.current.items = data || []; },
     setRules: (data) => { if(data) projectData.current.gameRules = data; },
 
-    // [CRUD Operations]
     addEntity: (ent) => projectData.current.entities.push(ent),
     removeEntity: (idx) => projectData.current.entities.splice(idx, 1),
     addItem: (item) => projectData.current.items.push(item),
@@ -121,5 +130,114 @@ module.exports = {
     },
 
     undo: () => commandManager.undo(),
-    redo: () => commandManager.redo()
+    redo: () => commandManager.redo(),
+
+    // [NEW] Bulk Update Function
+    bulkUpdate: (entityIds, stat, op, value) => {
+        projectData.current.entities.forEach(ent => {
+            if (entityIds.includes(ent.id)) {
+                // Ensure stat object exists
+                if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 };
+                
+                // Base Value update
+                let currentVal = ent.stats[stat].b;
+                if (op === 'set') currentVal = value;
+                else if (op === 'add') currentVal += value;
+                else if (op === 'mult') currentVal *= value;
+                
+                // Rounding for clean numbers (optional)
+                ent.stats[stat].b = parseFloat(currentVal.toFixed(2));
+            }
+        });
+    },
+
+    // ===========================================
+    // [NEW] 엔진 Export 로직
+    // ===========================================
+
+    // 1. Unity용 JSON
+    exportForUnity: () => {
+        const entities = projectData.current.entities;
+        const items = projectData.current.items;
+        const rules = projectData.current.gameRules;
+
+        const exportData = {
+            entities: entities.map(e => ({
+                id: e.id,
+                name: e.name,
+                variance: e.variance || 0,
+                stats: rules.stats.map(s => ({
+                    statName: s,
+                    baseVal: e.stats[s]?.b || 0,
+                    growthVal: e.stats[s]?.g || 0
+                })),
+                itemIds: items.filter(i => i.targets.includes(e.id)).map(i => i.id)
+            })),
+            items: items.map(i => ({
+                id: i.id,
+                name: i.name,
+                active: i.active,
+                modifiers: i.modifiers.map(m => ({ stat: m.stat, op: m.op, val: m.val })),
+                traits: (i.traits || []).map(t => {
+                    const trig = t.triggers[0];
+                    const cond = trig.conditions[0];
+                    const eff = trig.effects[0];
+                    return {
+                        traitName: t.name,
+                        trigger: trig.type,
+                        chance: cond.type === 'Chance' ? cond.value : 100,
+                        effectType: eff.type,
+                        target: eff.target,
+                        value: eff.value,
+                        stat: eff.stat || "",
+                        duration: eff.duration || 0
+                    };
+                })
+            }))
+        };
+        return JSON.stringify(exportData, null, 2);
+    },
+
+    // 2. Unreal용 JSON
+    exportForUnreal: () => {
+        const entities = projectData.current.entities;
+        const items = projectData.current.items;
+        const rules = projectData.current.gameRules;
+
+        const entityTable = entities.map(e => {
+            const row = {
+                Name: e.name,
+                Id: e.id,
+                Variance: e.variance || 0,
+                EquippedItemIds: items.filter(i => i.targets.includes(e.id)).map(i => i.id).join(',')
+            };
+            rules.stats.forEach(s => {
+                const statName = s.toLowerCase();
+                row[`${statName}_Base`] = e.stats[s]?.b || 0;
+                row[`${statName}_Growth`] = e.stats[s]?.g || 0;
+            });
+            return row;
+        });
+
+        const itemTable = items.map(i => {
+            const row = {
+                Name: i.name,
+                Id: i.id,
+                IsActive: i.active,
+                Modifiers: i.modifiers.map(m => `${m.stat}:${m.op}:${m.val}`).join(','),
+                Traits: (i.traits || []).map(t => {
+                    const trig = t.triggers[0];
+                    const cond = trig.conditions[0];
+                    const eff = trig.effects[0];
+                    return `${t.name}|${trig.type}|${cond.value}|${eff.type}|${eff.value}`;
+                }).join(';')
+            };
+            return row;
+        });
+
+        return JSON.stringify({
+            Entities: entityTable,
+            Items: itemTable
+        }, null, 2);
+    }
 };

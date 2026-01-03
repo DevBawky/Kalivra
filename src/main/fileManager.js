@@ -63,4 +63,23 @@ async function exportCsv(window, content) {
     return null;
 }
 
-module.exports = { saveKal, loadKal, exportCsv };
+async function exportJson(window, data) {
+    const result = await dialog.showSaveDialog(window, {
+        title: 'Export Balance Data (JSON)',
+        defaultPath: 'BalanceData_Share.json',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+
+    if (!result.canceled && result.filePath) {
+        try {
+            fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
+            return 'Balance Data (JSON) Exported successfully.';
+        } catch (err) {
+            console.error(err);
+            return 'Export failed.';
+        }
+    }
+    return null;
+}
+
+module.exports = { saveKal, loadKal, exportCsv, exportJson };
