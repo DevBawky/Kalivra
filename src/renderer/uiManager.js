@@ -65,8 +65,10 @@ function renderEntityCard(ent, index, container, callbacks) {
     const lockIcon = isLocked ? '🔒' : '🔓';
     const lockClass = isLocked ? 'locked' : '';
     const bgStyle = isLocked ? 'background-color: #2a2a2a; border: 1px solid #444;' : '';
+    
     const typeIcon = ent.attackType === 'Ranged' ? '🏹' : '⚔️';
     const typeTitle = ent.attackType === 'Ranged' ? 'Ranged (원거리)' : 'Melee (근거리)';
+    
     const rules = DM.getRules();
     let statsHtml = '';
     rules.stats.forEach(s => {
@@ -78,6 +80,7 @@ function renderEntityCard(ent, index, container, callbacks) {
             <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:60px;" ${disabledAttr}>
         </div>`;
     });
+    
     card.innerHTML = `
         <div class="entity-header" style="${bgStyle}">
             <div style="display:flex; gap:5px; align-items:center;">
@@ -94,9 +97,20 @@ function renderEntityCard(ent, index, container, callbacks) {
         </div>
         <div class="entity-stats-container ${lockClass}">${statsHtml}</div>
     `;
+
     card.querySelector('.lock-btn').addEventListener('click', () => callbacks.onLock(index));
+    
     if (!isLocked) {
-        card.querySelector('.type-btn').addEventListener('click', () => { ent.attackType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee'; callbacks.onInput(); });
+        const typeBtn = card.querySelector('.type-btn');
+        typeBtn.addEventListener('click', () => { 
+            ent.attackType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee'; 
+            
+            typeBtn.innerText = ent.attackType === 'Ranged' ? '🏹' : '⚔️';
+            typeBtn.title = ent.attackType === 'Ranged' ? 'Ranged (원거리)' : 'Melee (근거리)';
+            
+            callbacks.onInput(); 
+        });
+
         card.querySelector('.delete-btn').addEventListener('click', () => callbacks.onDelete(index));
         card.querySelectorAll('.prop-input').forEach(el => { attachChangeHandlers(el, (e) => { const key = e.target.dataset.key; ent[key] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { callbacks.onCommit(el.dataset.key, oldVal, newVal); }); });
         card.querySelectorAll('.stat-input').forEach(el => { attachChangeHandlers(el, (e) => { const s = e.target.dataset.stat; const t = e.target.dataset.type; if(!ent.stats[s]) ent.stats[s] = {b:0,g:0}; ent.stats[s][t] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { const s = el.dataset.stat; const t = el.dataset.type; callbacks.onStatCommit(ent.stats[s], t, parseFloat(oldVal), parseFloat(newVal)); }); });

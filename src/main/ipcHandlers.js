@@ -6,13 +6,19 @@ function registerHandlers(win) {
     ipcMain.on('max-app', () => win.isMaximized() ? win.unmaximize() : win.maximize());
     ipcMain.on('close-app', () => win.close());
 
-        ipcMain.on('force-focus', () => {
-            if (win) {
-                if (win.isMinimized()) win.restore();
-                
-                win.focus();
-            }
-        });
+    ipcMain.on('force-focus', (event) => {
+        if (!win) return;
+
+        if (win.isMinimized()) win.restore();
+
+        win.setAlwaysOnTop(true);
+        win.show();
+        win.focus();
+        
+        setTimeout(() => {
+            win.setAlwaysOnTop(false);
+        }, 100);
+    }); 
 
 
 
