@@ -64,11 +64,18 @@ function renderEntityCard(ent, index, container, callbacks) {
     const card = document.createElement('div');
     card.className = 'entity-card';
     
+    // [NEW] 공격 타입 초기화 (없으면 'Melee')
+    if (!ent.attackType) ent.attackType = 'Melee';
+
     const isLocked = ent.isLocked === true;
     const disabledAttr = isLocked ? 'disabled' : '';
     const lockIcon = isLocked ? '🔒' : '🔓';
     const lockClass = isLocked ? 'locked' : '';
     const bgStyle = isLocked ? 'background-color: #2a2a2a; border: 1px solid #444;' : '';
+
+    // [NEW] 공격 타입 아이콘 설정
+    const typeIcon = ent.attackType === 'Ranged' ? '🏹' : '⚔️';
+    const typeTitle = ent.attackType === 'Ranged' ? 'Ranged (원거리)' : 'Melee (근거리)';
 
     const rules = DM.getRules();
 
@@ -88,8 +95,11 @@ function renderEntityCard(ent, index, container, callbacks) {
         <div class="entity-header" style="${bgStyle}">
             <div style="display:flex; gap:5px; align-items:center;">
                 <button class="lock-btn" style="background:none; border:none; cursor:pointer; font-size:1.2em;">${lockIcon}</button>
+                
+                <button class="type-btn" title="${typeTitle}" style="background:none; border:1px solid #444; border-radius:4px; cursor:pointer; font-size:1.1em; padding:0 4px; color:#ddd;" ${disabledAttr}>${typeIcon}</button>
+
                 <input type="color" value="${ent.color}" data-key="color" class="prop-input" ${disabledAttr}>
-                <input type="text" value="${ent.name}" data-key="name" class="prop-input" style="font-weight:bold; width:100px;" ${disabledAttr}>
+                <input type="text" value="${ent.name}" data-key="name" class="prop-input" style="font-weight:bold; width:90px;" ${disabledAttr}>
             </div>
             <button class="delete-btn" style="${isLocked ? 'display:none' : ''}">✕</button>
         </div>
@@ -103,6 +113,12 @@ function renderEntityCard(ent, index, container, callbacks) {
     card.querySelector('.lock-btn').addEventListener('click', () => callbacks.onLock(index));
 
     if (!isLocked) {
+        // [NEW] 공격 타입 토글 이벤트
+        card.querySelector('.type-btn').addEventListener('click', () => {
+            ent.attackType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee';
+            callbacks.onInput(); // 리렌더링 트리거
+        });
+
         card.querySelector('.delete-btn').addEventListener('click', () => callbacks.onDelete(index));
         card.querySelectorAll('.prop-input').forEach(el => {
             attachChangeHandlers(el, (e) => { const key = e.target.dataset.key; ent[key] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { callbacks.onCommit(el.dataset.key, oldVal, newVal); });

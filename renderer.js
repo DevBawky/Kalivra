@@ -162,6 +162,7 @@ document.getElementById('configBtn').addEventListener('click', () => {
     document.getElementById('metaAuthor').value = meta.author || '';
     document.getElementById('metaDesc').value = meta.description || '';
     document.getElementById('dmgFormula').value = rules.dmgFormula;
+    document.getElementById('hitFormula').value = rules.hitFormula || "95 + (a.acc - b.eva)";
     document.getElementById('cpFormula').value = rules.cpFormula;
     document.getElementById('statDefinitions').value = rules.stats.join(', ');
     let descText = ""; if (rules.descriptions) descText = Object.entries(rules.descriptions).map(([k, v]) => `${k}: ${v}`).join('\n');
@@ -172,23 +173,56 @@ document.querySelector('.close-modal').addEventListener('click', () => configMod
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
     const dmgInput = document.getElementById('dmgFormula');
     const cpInput = document.getElementById('cpFormula');
+    const hitInput = document.getElementById('hitFormula');
     const statInput = document.getElementById('statDefinitions');
+    
     const newStats = statInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
     if (newStats.length === 0) { cpInput.classList.add('input-error'); return; }
 
-    const dmgCheck = Sim.validateFormula(dmgInput.value, newStats);
-    if (!dmgCheck.valid) { dmgInput.classList.add('input-error'); console.warn(dmgCheck.error); } else { dmgInput.classList.remove('input-error'); }
-    const cpCheck = Sim.validateFormula(cpInput.value, newStats);
-    if (!cpCheck.valid) { cpInput.classList.add('input-error'); console.warn(cpCheck.error); } else { cpInput.classList.remove('input-error'); }
+    const simpleValidate = (formula) => {
+        let depth = 0;
+        for (let char of formula) {
+            if (char === '(') depth++;
+            else if (char === ')') depth--;
+            if (depth < 0) return { valid: false, error: "닫는 괄호가 너무 많습니다." };
+        }
+        if (depth !== 0) return { valid: false, error: "괄호의 짝이 맞지 않습니다." };
+
+        const doubleOps = formula.match(/[\+\-\*\/]{2,}/g);
+        if (doubleOps) {
+            for (const op of doubleOps) {
+                if (op !== '**' && !op.endsWith('-')) {
+                    return { valid: false, error: `잘못된 연산자 중복: ${op}` };
+                }
+            }
+        }
+        return { valid: true };
+    };
+
+    const dmgCheck = simpleValidate(dmgInput.value);
+    if (!dmgCheck.valid) { dmgInput.classList.add('input-error'); alert(dmgCheck.error); return; } // 경고창 추가
+    else { dmgInput.classList.remove('input-error'); }
+
+    const cpCheck = simpleValidate(cpInput.value);
+    if (!cpCheck.valid) { cpInput.classList.add('input-error'); alert(cpCheck.error); return; }
+    else { cpInput.classList.remove('input-error'); }
+
+    const hitCheck = simpleValidate(hitInput.value);
+    if (!hitCheck.valid) { hitInput.classList.add('input-error'); alert(hitCheck.error); return; } 
+    else { hitInput.classList.remove('input-error'); }
 
     const rawDesc = document.getElementById('statDescInput').value; 
     const descriptions = {};
     rawDesc.split('\n').forEach(line => { const parts = line.split(':'); if (parts.length >= 2) descriptions[parts[0].trim()] = parts.slice(1).join(':').trim(); });
     
     DM.setMeta({ projectName: document.getElementById('metaProjectName').value, author: document.getElementById('metaAuthor').value, description: document.getElementById('metaDesc').value });
-    DM.setRules({ stats: newStats, descriptions: descriptions, dmgFormula: dmgInput.value, cpFormula: cpInput.value });
+    DM.setRules({ stats: newStats, descriptions: descriptions, dmgFormula: dmgInput.value, hitFormula: hitInput.value, cpFormula: cpInput.value });
+    
     DM.getEntities().forEach(ent => { newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; }); });
-    configModal.style.display = 'none'; refreshAll(); runSimulation();
+    
+    configModal.style.display = 'none'; 
+    refreshAll(); 
+    runSimulation();
 });
 
 const snapshotModal = document.getElementById('snapshotModal');
@@ -273,7 +307,26 @@ ipcRenderer.on('save-finished', (e, msg) => alert(msg));
 ipcRenderer.on('export-finished', (e, msg) => alert(msg));
 document.getElementById('calcBtn').addEventListener('click', runSimulation);
 dom.metric.addEventListener('change', runSimulation);
-document.getElementById('addBtn').addEventListener('click', () => { const color = '#' + Math.floor(Math.random()*16777215).toString(16); executeCommand(new AddEntityCommand({ id: Date.now(), name: 'New Unit', color, stats:{}, variance:0, isLocked: false })); });
+document.getElementById('addBtn').addEventListener('click', () => {
+    const color = '#' + Math.floor(Math.random() * 16777215).toString(16);
+    
+    const rules = DM.getRules();
+    const defaults = rules.defaultValues || {}; 
+    const newStats = {};
+
+    rules.stats.forEach(s => {
+        newStats[s] = defaults[s] ? { ...defaults[s] } : { b: 0, g: 0 };
+    });
+
+    executeCommand(new AddEntityCommand({ 
+        id: Date.now(), 
+        name: 'New Unit', 
+        color, 
+        stats: newStats,
+        variance: 0, 
+        isLocked: false 
+    }));
+});
 document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }], traits: [] })); });
 ['min','max','close'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
 
@@ -316,7 +369,7 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
             const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
             const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
             const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
-            const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, parseInt(document.getElementById('battleCount').value), DM.getRules().dmgFormula);
+            const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, parseInt(document.getElementById('battleCount').value), DM.getRules());
             results.push(batchResult);
             allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
         });
@@ -358,7 +411,7 @@ function runDetailAnalysis(idA, idB, lv) {
 
     setTimeout(() => {
         const startTime = performance.now();
-        const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules().dmgFormula);
+        const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules());
         const endTime = performance.now();
 
         Charts.renderDetailCharts(
@@ -443,7 +496,7 @@ if (btnRunLeague) {
                     const itemsB = DM.getItems().filter(item => item.active && item.targets.includes(entB.id));
                     const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(it=>it.traits||[])] };
 
-                    const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, count, DM.getRules().dmgFormula);
+                    const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, count, DM.getRules());
                     row.push(res.winRate);
                 }
                 matrix.push(row);
@@ -612,11 +665,42 @@ function flashErrorOnLabel(inputElement) {
 }
 
 function initProject() {
-    const defaultStats = ['hp', 'atk', 'def', 'aspd', 'eva', 'cric', 'crid'];
-    const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", aspd: "Attack Speed", eva: "Evasion", cric: "Critical Chance", crid: "Critical Damage" };
-    if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, dmgFormula: "atk * (100 / (100 + def))", cpFormula: "hp * 0.5 + atk * 2 + def + aspd * 5" }); }
+    const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
+    const defaultDescriptions = { 
+        hp: "Health Point", 
+        atk: "Base Damage", 
+        def: "Defense", 
+        acc: "Accuracy (명중)",
+        eva: "Evasion (회피)", 
+        cric: "Critical Chance", 
+        crid: "Critical Damage",
+        aspd: "Attack Speed"
+    };
+    const defaultValues = {
+        hp: { b: 200, g: 20 },
+        atk: { b: 20, g: 2 },
+        acc: { b: 95, g: 0 }, 
+        def: { b: 5, g: 0 },
+        aspd: { b: 1.0, g: 0 },
+        eva: { b: 20, g: 1 },
+        cric: { b: 15, g: 0 },
+        crid: { b: 1.5, g: 0 }
+    };
+    
+    // (CP 공식이나 데미지 공식은 취향껏 수정 가능)
+    if (!DM.hasProjectData()) { 
+        DM.setRules({ 
+            stats: defaultStats, 
+            descriptions: defaultDescriptions, 
+            defaultValues: defaultValues,
+            dmgFormula: "atk * (100 / (100 + def))", 
+            hitFormula: "95 + (a.acc - b.eva)",
+            cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" 
+        }); 
+    }
     refreshAll();
 }
+
 // initProject(); // hasProjectData 체크가 있으므로 중복 호출 방지를 위해 필요시 주석처리. 보통은 켜둡니다.
 initProject();
 refreshAll();

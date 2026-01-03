@@ -7,15 +7,35 @@ let projectData = {
         version: "1.0.0"
     },
     snapshots: [],
-    itemSets: [], // [NEW] 아이템 세트 저장소
+    itemSets: [], 
     current: {
         entities: [],
         items: [],
         gameRules: {
-            stats: ['hp', 'atk', 'def', 'cric', 'crid', 'aspd', 'eva'],
-            descriptions: {},
+            stats: ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'],
+            defaultValues: {
+                hp: { b: 200, g: 20 },
+                atk: { b: 20, g: 2 },
+                acc: { b: 95, g: 0 }, 
+                def: { b: 5, g: 0 },
+                aspd: { b: 1.0, g: 0 },
+                eva: { b: 20, g: 1 },
+                cric: { b: 15, g: 0 },
+                crid: { b: 1.5, g: 0 }
+            },
+            descriptions: {
+                hp: "Health Point", 
+                atk: "Base Damage", 
+                def: "Defense", 
+                acc: "Accuracy (명중)",
+                eva: "Evasion (회피)", 
+                cric: "Critical Chance", 
+                crid: "Critical Damage",
+                aspd: "Attack Speed"
+            },
             dmgFormula: 'a.atk * (100 / (100 + b.def))',
-            cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + eva * 2'
+            hitFormula: "95 + (a.acc - b.eva)",
+            cpFormula: 'atk * aspd * 10 + hp * 0.5 + def * 1.5 + acc + eva * 2'
         }
     }
 };

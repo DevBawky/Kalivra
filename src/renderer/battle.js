@@ -26,6 +26,11 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         tracker: { attacks: 0, crits: 0, hits: 0, misses: 0, damageDealt: 0, overkill: 0 }
     });
 
+    // [수정 완료] rules -> dmgFormula로 변경 (이 부분이 원인이었습니다)
+    const gameRules = (typeof dmgFormula === 'string') 
+        ? { dmgFormula: dmgFormula, hitFormula: "95 + (a.acc - b.eva)" } 
+        : dmgFormula;
+
     const fighterA = initFighter(entA, statsA);
     const fighterB = initFighter(entB, statsB);
 
@@ -68,7 +73,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             if (s.includes("buff")) return "BuffStat";
             if (s.includes("percent") || s.includes("%")) return "PercentOfDamage";
 
-            // [FIX] Condition Type Mappings (여기가 빠져서 버그 발생)
+            // Condition Type Mappings
             if (s.includes("chance")) return "chance";
             if (s.includes("hp") && s.includes("less")) return "hplessthen";
             if (s.includes("always")) return "always";
@@ -101,7 +106,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
                         return (hpTarget.currentHp / hpTarget.currentStats.hp) * 100 <= cond.value;
                     case "iscritical": return !!context.isCrit;
                     case "always": return true;
-                    default: return true; // 알 수 없는 조건은 true 처리 (기존 동작)
+                    default: return true; 
                 }
             });
         },
@@ -173,24 +178,44 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             isCrit: false 
         };
 
+        // 0. 공격 전 트리거
         BattleSystem.processTriggers("OnBeforeAttack", attacker, context);
 
-        const evaChance = bStats.eva || 0; 
-        if (Math.random() * 100 < evaChance) {
-            addLog(turn, attacker, defender, 'miss', 0, 'Missed! (Dodged)');
+        // ===============================================
+        // 1. 명중(Hit) 공식 계산
+        // ===============================================
+        let hitChance = 0;
+        try {
+            hitChance = Sim.calculateValue(gameRules.hitFormula, { a: aStats, b: bStats });
+        } catch (e) {
+            const acc = aStats.acc || 0;
+            const eva = bStats.eva || 0;
+            hitChance = 95 + (acc - eva);
+        }
+
+        hitChance = Math.max(5, Math.min(100, hitChance));
+
+        // 회피 판정
+        if (Math.random() * 100 > hitChance) {
+            addLog(turn, attacker, defender, 'miss', 0, 'Missed!');
             attacker.tracker.misses++; 
             BattleSystem.processTriggers("OnMiss", attacker, context);
             BattleSystem.processTriggers("OnEvasion", defender, context);
-            return;
+            return; 
         }
 
+        // ===============================================
+        // 2. 데미지 계산
+        // ===============================================
         let rawDmg = 0;
-        try { rawDmg = Sim.calculateValue(dmgFormula, { a: aStats, b: bStats }); } 
-        catch (e) { rawDmg = 0; }
+        try { 
+            rawDmg = Sim.calculateValue(gameRules.dmgFormula, { a: aStats, b: bStats }); 
+        } catch (e) { rawDmg = 0; }
 
         const variance = attacker.variance || 0;
         if (variance > 0) rawDmg *= (1 + (Math.random() * variance * 2 - variance));
 
+        // 3. 크리티컬 체크
         const criChance = aStats.cric !== undefined ? aStats.cric : (aStats.cri || 0);
         if (Math.random() * 100 < criChance) {
             context.isCrit = true;
@@ -198,10 +223,11 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             attacker.tracker.crits++;
         }
 
-        // [Phase 1] 데미지 계산 전
+        // 4. [Phase 1] 피격 시 (데미지 확정 전)
         context.damage = Math.floor(rawDmg);
         BattleSystem.processTriggers("OnHitTaken", defender, context, ["ModifyDamage", "BuffStat"]);
 
+        // 5. 최종 데미지 적용
         rawDmg = (rawDmg * context.damageMultiplier) + context.damageBonus;
         let finalDmg = Math.floor(rawDmg);
         if (finalDmg < 0) finalDmg = 0;
@@ -215,11 +241,11 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         if (context.isCrit) msg += " (Critical!)";
         addLog(turn, attacker, defender, 'attack', finalDmg, msg);
 
-        // [Phase 2] 데미지 적용 후
+        // 6. [Phase 2] 피격 시 (데미지 적용 후)
         BattleSystem.processTriggers("OnHitTaken", defender, context, ["Heal", "DealDamage", "BuffStat"]);
 
+        // 7. 적중 시 & 크리티컬 시 트리거
         BattleSystem.processTriggers("OnAttackHit", attacker, context);
-
         if (context.isCrit) {
             BattleSystem.processTriggers("OnCritical", attacker, context);
         }
@@ -291,7 +317,7 @@ function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula) {
     const turnDist = {}; const winHpDistA = []; const winHpDistB = []; 
 
     for (let i = 0; i < count; i++) {
-        const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, false);
+    const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, false);
         if (result.isPlayerFirst) { totalFirst++; if (result.winnerId === entA.id) winsWhenFirst++; }
         totalAttacksA += result.statsA.attacks; totalCritsA += result.statsA.crits;
         totalDamageA += result.statsA.damageDealt; totalDefensesA += result.statsB.attacks; totalDodgesA += result.statsB.misses;
