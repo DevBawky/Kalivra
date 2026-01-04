@@ -182,16 +182,255 @@ function injectPresetButton() {
     btnGroup.appendChild(btnSave); btnGroup.appendChild(btnLoad); dmgInput.parentElement.insertBefore(btnGroup, dmgInput);
 }
 function setupExportDropdown() {
-    const oldBtn = document.getElementById('exportBtn'); if (!oldBtn || oldBtn.parentElement.classList.contains('nav-dropdown')) return;
-    const dropdownDiv = document.createElement('div'); dropdownDiv.className = 'nav-dropdown';
-    const mainBtn = document.createElement('button'); mainBtn.innerHTML = 'Export ▼'; mainBtn.className = oldBtn.className + ' dropbtn'; mainBtn.style.cssText = oldBtn.style.cssText;
-    const contentDiv = document.createElement('div'); contentDiv.id = 'exportDropdownContent'; contentDiv.className = 'dropdown-content';
-    const btnCSV = document.createElement('button'); btnCSV.innerHTML = '📄 To CSV (Table)'; btnCSV.onclick = (e) => { e.stopPropagation(); exportToCSV(); contentDiv.classList.remove('show-dropdown'); };
-    const btnJSON = document.createElement('button'); btnJSON.innerHTML = '📦 To JSON (Share)'; btnJSON.onclick = (e) => { e.stopPropagation(); exportToJSON(); contentDiv.classList.remove('show-dropdown'); };
-    contentDiv.appendChild(btnCSV); contentDiv.appendChild(btnJSON); dropdownDiv.appendChild(mainBtn); dropdownDiv.appendChild(contentDiv); oldBtn.parentNode.replaceChild(dropdownDiv, oldBtn);
-    mainBtn.addEventListener('click', (e) => { e.stopPropagation(); contentDiv.classList.toggle('show-dropdown'); });
-    window.addEventListener('click', (e) => { if (!e.target.matches('.dropbtn')) { const dropdowns = document.getElementsByClassName("dropdown-content"); for (let i = 0; i < dropdowns.length; i++) { if (dropdowns[i].classList.contains('show-dropdown')) { dropdowns[i].classList.remove('show-dropdown'); } } } });
+    const oldBtn = document.getElementById('exportBtn');
+    if (!oldBtn || oldBtn.parentElement.classList.contains('nav-dropdown')) return;
+
+    const dropdownDiv = document.createElement('div');
+    dropdownDiv.className = 'nav-dropdown';
+    
+    const mainBtn = document.createElement('button');
+    mainBtn.innerHTML = 'Export ▼';
+    mainBtn.className = oldBtn.className + ' dropbtn'; 
+    mainBtn.style.cssText = oldBtn.style.cssText; 
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.id = 'exportDropdownContent';
+    contentDiv.className = 'dropdown-content';
+    
+    // [NEW] PDF Report Button
+    const btnPDF = document.createElement('button');
+    btnPDF.innerHTML = '📑 To PDF Report';
+    btnPDF.onclick = (e) => {
+        e.stopPropagation();
+        generateReport(); // 리포트 생성 호출
+        contentDiv.classList.remove('show-dropdown');
+    };
+
+    const btnCSV = document.createElement('button');
+    btnCSV.innerHTML = '📄 To CSV (Table)';
+    btnCSV.onclick = (e) => {
+        e.stopPropagation();
+        exportToCSV(); 
+        contentDiv.classList.remove('show-dropdown');
+    };
+
+    const btnJSON = document.createElement('button');
+    btnJSON.innerHTML = '📦 To JSON (Share)';
+    btnJSON.onclick = (e) => {
+        e.stopPropagation();
+        exportToJSON(); 
+        contentDiv.classList.remove('show-dropdown');
+    };
+
+    contentDiv.appendChild(btnPDF);
+    contentDiv.appendChild(btnCSV);
+    contentDiv.appendChild(btnJSON);
+    
+    dropdownDiv.appendChild(mainBtn);
+    dropdownDiv.appendChild(contentDiv);
+    
+    oldBtn.parentNode.replaceChild(dropdownDiv, oldBtn);
+
+    mainBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        contentDiv.classList.toggle('show-dropdown');
+    });
+
+    window.addEventListener('click', (e) => {
+        if (!e.target.matches('.dropbtn')) {
+            const dropdowns = document.getElementsByClassName("dropdown-content");
+            for (let i = 0; i < dropdowns.length; i++) {
+                if (dropdowns[i].classList.contains('show-dropdown')) {
+                    dropdowns[i].classList.remove('show-dropdown');
+                }
+            }
+        }
+    });
 }
+
+async function generateReport() {
+    if (!window.jspdf || !window.html2canvas) return ModalSystem.alert("Libraries missing");
+
+    const { jsPDF } = window.jspdf;
+    const btn = document.querySelector('.dropbtn');
+    const originalText = btn ? btn.innerHTML : 'Export';
+    
+    if(btn) btn.innerHTML = '⏳ Processing...';
+    ModalSystem.alert("Generating Report...", null);
+
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+        const safeBottom = pageHeight - 20; 
+        const contentWidth = pageWidth - (margin * 2);
+
+        const entities = DM.getEntities();
+        const rules = DM.getRules();
+        const items = DM.getItems();
+        const lv = parseInt(document.getElementById('maxLevel').value) || 20;
+        
+        const matrixData = [];
+        const simCount = 50; 
+
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        for (let i = 0; i < entities.length; i++) {
+            const row = [];
+            const entA = entities[i];
+            const statsA = Sim.getStatsAtLevel(entA, lv, items, rules);
+            const eqItemsA = items.filter(it => it.active && it.targets.includes(entA.id));
+            const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...eqItemsA.flatMap(it=>it.traits||[])] };
+
+            for (let j = 0; j < entities.length; j++) {
+                if (i === j) {
+                    row.push(null); 
+                    continue;
+                }
+                const entB = entities[j];
+                const statsB = Sim.getStatsAtLevel(entB, lv, items, rules);
+                const eqItemsB = items.filter(it => it.active && it.targets.includes(entB.id));
+                const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...eqItemsB.flatMap(it=>it.traits||[])] };
+
+                const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, simCount, rules);
+                row.push(res.winRate);
+            }
+            matrixData.push(row);
+        }
+
+        const drawHeader = (title) => {
+            doc.setFillColor(32, 34, 37); 
+            doc.rect(0, 0, pageWidth, pageHeight, 'F');
+            doc.setFillColor(47, 49, 54); 
+            doc.rect(0, 0, pageWidth, 25, 'F');
+            doc.setFontSize(16);
+            doc.setTextColor(255, 255, 255);
+            doc.text("Kalivra Report", margin, 17);
+            doc.setFontSize(10);
+            doc.setTextColor(185, 187, 190);
+            doc.text(`${title} | Lv.${lv} | ${new Date().toLocaleDateString()}`, margin, 32);
+        };
+
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.top = '-9999px';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.width = '750px'; 
+        tempContainer.style.backgroundColor = '#202225';
+        document.body.appendChild(tempContainer);
+
+        drawHeader("Overview");
+        let currentY = 40;
+
+        const chartCanvas = document.getElementById('balanceChart');
+        if (chartCanvas) {
+            doc.setFontSize(14);
+            doc.setTextColor(255, 255, 255);
+            doc.text("1. Power Curve", margin, currentY);
+            currentY += 8;
+            const chartImg = chartCanvas.toDataURL("image/png");
+            doc.addImage(chartImg, 'PNG', margin, currentY, contentWidth, 90);
+            currentY += 100;
+        }
+
+        doc.addPage();
+        drawHeader("Matchup Matrix");
+        currentY = 40;
+        
+        let matrixHTML = `
+        <div style="padding:10px; background:#111; width:fit-content;">
+        <div style="display:grid; grid-template-columns: 80px repeat(${entities.length}, 1fr); gap:1px; border:1px solid #333;">
+            <div style="padding:8px; background:#2f3136; color:#ccc; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center;">A \\ D</div>
+            ${entities.map(e => `<div style="padding:5px; background:#2f3136; color:${e.color}; font-size:11px; font-weight:bold; text-align:center; overflow:hidden;">${e.name.substring(0,6)}</div>`).join('')}
+        `;
+
+        for(let i=0; i<entities.length; i++) {
+            matrixHTML += `<div style="padding:5px; background:#2f3136; color:${entities[i].color}; font-size:11px; font-weight:bold; display:flex; align-items:center;">${entities[i].name}</div>`;
+            for(let j=0; j<entities.length; j++) {
+                const rate = matrixData[i][j];
+                let bg = '#222';
+                let text = '-';
+                if (rate !== null) {
+                    text = Math.round(rate);
+                    if (rate > 60) bg = `rgba(45, 164, 78, ${rate/100})`; 
+                    else if (rate < 40) bg = `rgba(231, 76, 60, ${(100-rate)/100})`; 
+                    else bg = '#d29922'; 
+                }
+                matrixHTML += `<div style="background:${bg}; color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:bold; height:30px;">${text}</div>`;
+            }
+        }
+        matrixHTML += `</div></div>`;
+        tempContainer.innerHTML = matrixHTML;
+
+        const matrixCanvas = await html2canvas(tempContainer, { backgroundColor: '#202225', scale: 2 });
+        const mProps = doc.getImageProperties(matrixCanvas.toDataURL('image/png'));
+        const mHeight = (mProps.height * contentWidth) / mProps.width;
+        
+        if (currentY + mHeight > safeBottom) {
+            doc.addPage();
+            drawHeader("Matchup Matrix");
+            currentY = 40;
+        }
+        doc.addImage(matrixCanvas.toDataURL('image/png'), 'PNG', margin, currentY, contentWidth, mHeight);
+
+        doc.addPage();
+        drawHeader("Entity Specs");
+        currentY = 40;
+
+        for (let idx = 0; idx < entities.length; idx++) {
+             const ent = entities[idx];
+             const stats = Sim.getStatsAtLevel(ent, lv, items, rules);
+             let totalWins = 0, totalBattles = 0;
+             matrixData[idx].forEach(r => { if(r !== null) { totalWins += r; totalBattles++; } });
+             const avgWinRate = totalBattles > 0 ? (totalWins / totalBattles).toFixed(1) : 0;
+             const winColor = avgWinRate >= 50 ? '#2da44e' : '#e74c3c';
+
+             tempContainer.innerHTML = `
+             <div style="background:#2f3136; border-left: 5px solid ${ent.color}; padding:15px; border-radius:6px; color:#eee; font-family:sans-serif; width:700px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:8px;">
+                    <span style="font-size:20px; font-weight:bold;">${ent.name}</span>
+                    <span style="font-size:16px; color:${winColor}; font-weight:bold;">Win Rate: ${avgWinRate}%</span>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px;">
+                    ${Object.entries(stats).map(([k, v]) => `
+                        <div style="background:#202225; padding:6px; border-radius:4px; text-align:center;">
+                            <div style="font-size:10px; color:#888;">${k.toUpperCase()}</div>
+                            <div style="font-size:14px; font-weight:bold;">${Number.isInteger(v) ? v : v.toFixed(2)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+             </div>`;
+
+             const cardCanvas = await html2canvas(tempContainer, { backgroundColor: '#202225', scale: 2 });
+             const cImg = cardCanvas.toDataURL('image/png');
+             const cProps = doc.getImageProperties(cImg);
+             const cHeight = (cProps.height * contentWidth) / cProps.width;
+
+             if (currentY + cHeight > safeBottom) {
+                 doc.addPage();
+                 drawHeader("Entity Specs");
+                 currentY = 40;
+             }
+
+             doc.addImage(cImg, 'PNG', margin, currentY, contentWidth, cHeight);
+             currentY += cHeight + 5; 
+        }
+
+        document.body.removeChild(tempContainer);
+        
+        doc.save(`Kalivra_Report_${Date.now()}.pdf`);
+        ModalSystem.alert("PDF Generated!");
+
+    } catch (err) {
+        console.error(err);
+        ModalSystem.alert(err.message);
+    } finally {
+        if(btn) btn.innerHTML = originalText;
+    }
+}
+
+
 function exportToCSV() {
     const entities = DM.getEntities(); const rules = DM.getRules(); const maxLv = parseInt(dom.maxLevel.value) || 20; const metric = dom.metric.value; const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
     let csv = `Level,Metric (${metric.toUpperCase()}),Formula: ${formula.replace(/,/g, ';')}\n`; csv += "Level," + entities.map(e => e.name).join(',') + "\n";
