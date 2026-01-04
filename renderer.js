@@ -487,22 +487,87 @@ document.getElementById('closeBtn').addEventListener('click', () => { if (isProj
 const battleModal = document.getElementById('battleModal');
 document.getElementById('openBattleBtn').addEventListener('click', () => { const sA = document.getElementById('battleEntA'), sB = document.getElementById('battleEntB'); sA.innerHTML = ''; sB.innerHTML = '<option value="all">ALL (League)</option>'; DM.getEntities().forEach(e => { sA.add(new Option(e.name, e.id)); sB.add(new Option(e.name, e.id)); }); battleModal.style.display = 'flex'; });
 document.getElementById('runBattleBtn').addEventListener('click', () => {
-    const idA = parseInt(document.getElementById('battleEntA').value); const entA = DM.getEntities().find(e => e.id === idA); const lv = parseInt(document.getElementById('battleLevel').value); if (!entA) return ModalSystem.alert("Select Attacker!"); 
+    const idA = parseInt(document.getElementById('battleEntA').value);
+    const entA = DM.getEntities().find(e => e.id === idA);
+    const lv = parseInt(document.getElementById('battleLevel').value);
+    if (!entA) return ModalSystem.alert("Select Attacker!"); 
+    
     let statsA; try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return ModalSystem.alert(`Error getting Stats A: ${e.message}`); }
-    const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id)); const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
-    const results = []; const idB = document.getElementById('battleEntB').value; let targets = [];
-    if (idB === 'all') targets = DM.getEntities().filter(e => e.id !== idA); else { const t = DM.getEntities().find(e => e.id == parseInt(idB)); if (t) targets.push(t); }
+    const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
+    const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
+    
+    const results = [];
+    const idB = document.getElementById('battleEntB').value;
+    let targets = [];
+    if (idB === 'all') targets = DM.getEntities().filter(e => e.id !== idA);
+    else { const t = DM.getEntities().find(e => e.id == parseInt(idB)); if (t) targets.push(t); }
     if (targets.length === 0) return ModalSystem.alert("Target not found"); 
-    dom.battleLog.innerHTML = '<div style="padding:10px; text-align:center; color:#fee75c;">Simulating...</div>'; dom.battleStatList.innerHTML = '';
+    
+    dom.battleLog.innerHTML = '<div style="padding:10px; text-align:center; color:#fee75c;">Simulating...</div>';
+    dom.battleStatList.innerHTML = '';
+    
     setTimeout(() => {
         try {
-            let allBattleResults = []; const battleCount = parseInt(document.getElementById('battleCount').value) || 100; const rules = DM.getRules();
+            let allBattleResults = [];
+            const battleCount = parseInt(document.getElementById('battleCount').value) || 100;
+            const rules = DM.getRules();
+            const maxLv = parseInt(document.getElementById('maxLevel').value) || 20;
+
+            let phaseAnalysisHTML = '';
+
             targets.forEach(entB => {
-                const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), rules); const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id)); const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
-                const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, battleCount, rules); results.push(batchResult); allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
+                const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), rules);
+                const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
+                const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
+                
+                const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, battleCount, rules);
+                results.push(batchResult);
+                allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
+
+                if (targets.length === 1) {
+                    const phases = Battle.runPhaseAnalysis(battleEntA, battleEntB, DM.getItems(), rules, maxLv);
+                    
+                    const getRate = (p) => p.total > 0 ? ((p.wins / p.total) * 100).toFixed(1) : 0;
+                    const getBar = (rate) => `<div style="width:${rate}%; background-color:${rate >= 50 ? '#2da44e' : '#e74c3c'}; height:4px; border-radius:2px;"></div>`;
+                    
+                    phaseAnalysisHTML = `
+                    <div style="margin-bottom:15px; background:#18191c; border:1px solid #3e3e42; border-radius:4px; padding:10px;">
+                        <div style="font-weight:bold; color:#ccc; margin-bottom:8px; font-size:0.9em;">📊 Phase Analysis (Lv.1 ~ ${maxLv})</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; text-align:center;">
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#5fabff;">Early (Lv.1-${phases.Early.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Early)}%</div>
+                                ${getBar(getRate(phases.Early))}
+                            </div>
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#d29922;">Mid (Lv.${phases.Mid.min}-${phases.Mid.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Mid)}%</div>
+                                ${getBar(getRate(phases.Mid))}
+                            </div>
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#e74c3c;">Late (Lv.${phases.Late.min}-${phases.Late.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Late)}%</div>
+                                ${getBar(getRate(phases.Late))}
+                            </div>
+                        </div>
+                    </div>`;
+                }
             });
-            Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results); renderBattleLog(allBattleResults, entA.name); document.getElementById('statDisplayLevel').innerText = lv; renderBattleStats(entA, statsA, allBattleResults);
-        } catch (err) { dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`; ModalSystem.alert(`Simulation Failed:\n${err.message}`); } 
+
+            Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results);
+            
+            renderBattleLog(allBattleResults, entA.name);
+            if (phaseAnalysisHTML) {
+                dom.battleLog.insertAdjacentHTML('afterbegin', phaseAnalysisHTML);
+            }
+
+            document.getElementById('statDisplayLevel').innerText = lv;
+            renderBattleStats(entA, statsA, allBattleResults);
+
+        } catch (err) { 
+            dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`; 
+            ModalSystem.alert(`Simulation Failed:\n${err.message}`); 
+        } 
     }, 50);
 });
 if(btnDetail) { btnDetail.addEventListener('click', () => { const idA = parseInt(document.getElementById('battleEntA').value); const idB = document.getElementById('battleEntB').value; const lv = parseInt(document.getElementById('battleLevel').value); if (idB === 'all') return ModalSystem.alert("Select a single opponent for M.C."); runDetailAnalysis(idA, parseInt(idB), lv); }); }
