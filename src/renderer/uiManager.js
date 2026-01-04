@@ -78,7 +78,7 @@ function renderEntityCard(ent, index, container, callbacks) {
             <span class="stat-label-text" title="${desc}" style="width:40px; font-size:0.8em; font-weight:bold; color:#b9bbbe;">${s.toUpperCase()}</span>
             <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:50px;" ${disabledAttr}>
             <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:50px;" ${disabledAttr}>
-            <button class="solver-btn" data-ent-idx="${index}" data-stat="${s}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; font-size:.7em; padding:0 2px;">🎯</button>
+            <button class="solver-btn" data-ent-idx="${index}" data-stat="${s}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; font-size:.7em; padding:0 2px;">✨</button>
         </div>`;
     });
     

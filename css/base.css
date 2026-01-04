@@ -5,6 +5,20 @@ body {
     margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
 }
 
+.icon-img {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+    margin-right: 5px;
+    object-fit: contain;
+}
+
+.tool-btn img {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+}
+
 .top-toolbar {
     display: flex;
     align-items: center;
