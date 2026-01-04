@@ -5,6 +5,7 @@ const UI = require('./src/renderer/uiManager');
 const Charts = require('./src/renderer/chartManager');
 const Utils = require('./src/renderer/utils');
 const Battle = require('./src/renderer/battle');
+const Solver = require('./src/renderer/solver');
 
 const FORMULA_PRESETS = [
     { name: "Standard (Effective HP)", desc: "Defense increases HP as %. Stable scaling.", dmg: "atk * (100 / (100 + def))", hit: "a.acc - b.eva", cp: "hp * 0.5 + atk * 2 + def * 1.5 + acc + eva + aspd * 5" },
@@ -146,6 +147,8 @@ const btnItemSet = document.getElementById('btnItemSet');
 const closeItemSet = document.querySelector('.close-itemset');
 const saveItemSetBtn = document.getElementById('saveItemSetBtn');
 const itemSetList = document.getElementById('itemSetList');
+const solverModal = document.getElementById('solverModal');
+let solverContext = null;
 
 let isProjectModified = false;
 function setModified(modified) {
@@ -483,7 +486,15 @@ function refreshAll() {
             onCommit: (key, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI)); },
             onStatCommit: (statObj, type, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI)); },
             onLock: () => { ent.isLocked = !ent.isLocked; refreshAll(); },
-            onDelete: (i) => executeCommand(new RemoveEntityCommand(i))
+            onDelete: (i) => executeCommand(new RemoveEntityCommand(i)),
+            onSolver: (statName) => {
+                solverContext = { entId: ent.id, stat: statName };
+                document.getElementById('solverTargetName').innerText = ent.name;
+                document.getElementById('solverStatName').innerText = statName.toUpperCase();
+                document.getElementById('solverLevel').value = document.getElementById('maxLevel').value;
+                solverModal.style.display = 'flex';
+                document.getElementById('solverValue').focus();
+            }
         });
     });
     DM.getItems().forEach((item, idx) => {
@@ -503,6 +514,50 @@ function refreshAll() {
         });
     });
 }
+
+document.querySelector('.close-solver').addEventListener('click', () => solverModal.style.display = 'none');
+
+document.getElementById('runSolverBtn').addEventListener('click', () => {
+    if (!solverContext) return;
+    
+    const targetLv = parseInt(document.getElementById('solverLevel').value);
+    const targetVal = parseFloat(document.getElementById('solverValue').value);
+    const metric = document.getElementById('solverMetric').value;
+    
+    if (!targetVal || isNaN(targetVal)) return ModalSystem.alert("Please enter a valid target value.");
+
+    const entity = DM.getEntities().find(e => e.id === solverContext.entId);
+    if (!entity) return;
+
+    const resultGrowth = Solver.findGrowthValue(
+        entity, 
+        DM.getItems(), 
+        DM.getRules(), 
+        targetLv, 
+        targetVal, 
+        solverContext.stat, 
+        metric
+    );
+
+    if (resultGrowth !== null) {
+        const oldVal = entity.stats[solverContext.stat].g;
+        
+        executeCommand(new StatChangeCommand(
+            entity.stats[solverContext.stat], 
+            'g', 
+            oldVal, 
+            resultGrowth, 
+            () => { refreshAll(); runSimulation(); }
+        ));
+
+        solverModal.style.display = 'none';
+        
+        const btn = document.getElementById('runSolverBtn');
+        ModalSystem.alert(`Applied Growth: ${resultGrowth}`);
+    } else {
+        ModalSystem.alert("Could not calculate a valid growth value.\nCheck your formulas.");
+    }
+});
 
 function analyzeBalanceIssues(rawData, maxLevel, rules) {
     const issues = []; const entities = Object.values(rawData);

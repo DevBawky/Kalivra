@@ -76,8 +76,9 @@ function renderEntityCard(ent, index, container, callbacks) {
         const desc = rules.descriptions && rules.descriptions[s] ? rules.descriptions[s] : s.toUpperCase();
         statsHtml += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:5px;">
             <span class="stat-label-text" title="${desc}" style="width:40px; font-size:0.8em; font-weight:bold; color:#b9bbbe;">${s.toUpperCase()}</span>
-            <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:60px;" ${disabledAttr}>
-            <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:60px;" ${disabledAttr}>
+            <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:50px;" ${disabledAttr}>
+            <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:50px;" ${disabledAttr}>
+            <button class="solver-btn" data-ent-idx="${index}" data-stat="${s}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; font-size:.7em; padding:0 2px;">🎯</button>
         </div>`;
     });
     
@@ -106,13 +107,19 @@ function renderEntityCard(ent, index, container, callbacks) {
             const oldType = ent.attackType;
             const newType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee'; 
             
-            // [Undo/Redo] 직접 할당 대신 callback 호출
             if(callbacks.onCommit) callbacks.onCommit('attackType', oldType, newType);
         });
 
         card.querySelector('.delete-btn').addEventListener('click', () => callbacks.onDelete(index));
         card.querySelectorAll('.prop-input').forEach(el => { attachChangeHandlers(el, (e) => { const key = e.target.dataset.key; ent[key] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { callbacks.onCommit(el.dataset.key, oldVal, newVal); }); });
         card.querySelectorAll('.stat-input').forEach(el => { attachChangeHandlers(el, (e) => { const s = e.target.dataset.stat; const t = e.target.dataset.type; if(!ent.stats[s]) ent.stats[s] = {b:0,g:0}; ent.stats[s][t] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { const s = el.dataset.stat; const t = el.dataset.type; callbacks.onStatCommit(ent.stats[s], t, parseFloat(oldVal), parseFloat(newVal)); }); });
+        card.querySelectorAll('.solver-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (callbacks.onSolver) {
+                    callbacks.onSolver(btn.dataset.stat);
+                }
+            });
+        });
     }
     container.appendChild(card);
 }

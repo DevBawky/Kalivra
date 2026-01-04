@@ -160,6 +160,37 @@
             <div class="snapshot-list" id="snapshotListContainer"></div>
         </div>
     </div>
+    <div id="solverModal" class="modal">
+        <div class="modal-content" style="width: 400px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3>🎯 Goal Seeker</h3>
+                <span class="close-modal close-solver" style="cursor:pointer; font-size:1.5em;">&times;</span>
+            </div>
+            
+            <div style="margin-bottom:15px; background:#252526; padding:10px; border-radius:4px;">
+                <div style="color:#ccc; margin-bottom:5px; font-size:0.9em;">Targeting: <b id="solverTargetName" style="color:#5fabff;">-</b></div>
+                <div style="color:#ccc; font-size:0.9em;">Adjusting: <b id="solverStatName" style="color:#e74c3c;">-</b> (Growth)</div>
+            </div>
+
+            <div class="config-section">
+                <label>At Level</label>
+                <input type="number" id="solverLevel" value="20">
+            </div>
+            <div class="config-section">
+                <label>Target Metric</label>
+                <select id="solverMetric" class="dark-select" style="width:100%;">
+                    <option value="cp">Combat Power (CP)</option>
+                    <option value="dps">DPS (Avg Damage)</option>
+                </select>
+            </div>
+            <div class="config-section">
+                <label>Target Value</label>
+                <input type="number" id="solverValue" placeholder="e.g. 1000">
+            </div>
+
+            <button id="runSolverBtn" class="btn" style="background-color:#5fabff; margin-top:10px;">Calculate & Apply</button>
+        </div>
+    </div>
     <div id="battleModal" class="modal">
         <div class="modal-content battle-content" style="width: 1400px; max-width: 95vw;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><h3>Battle Simulator</h3><span class="close-battle" style="font-size:2em; cursor:pointer;">&times;</span></div>
