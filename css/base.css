@@ -34,17 +34,20 @@ h2, h3 { border-bottom: 1px solid #4f545c; padding-bottom: 10px; margin-bottom: 
 .top-toolbar {
     display: flex;
     align-items: center;
+    justify-content: flex-start; /* 왼쪽 정렬 */
     gap: 10px;
     height: 40px;
-    background-color: #252526; /* 어두운 회색 배경 */
+    background-color: #252526;
     border-bottom: 1px solid #3e3e42;
     padding: 0 10px;
     box-sizing: border-box;
+    user-select: none;
 }
 
 .toolbar-group {
     display: flex;
     gap: 5px;
+    align-items: center;
 }
 
 .toolbar-divider {
@@ -72,9 +75,38 @@ h2, h3 { border-bottom: 1px solid #4f545c; padding-bottom: 10px; margin-bottom: 
 .tool-btn:hover {
     background-color: #3e3e42;
     color: white;
+    border: 1px solid #555;
 }
 
-/* 특정 버튼 강조 색상 (옵션) */
 .tool-btn.primary { color: #5fabff; font-weight: bold; }
 .tool-btn.warning { color: #d29922; }
 .tool-btn.success { color: #2da44e; }
+.tool-btn.secondary { color: #b9bbbe; }
+.tool-btn.bulk { color: #4ec9b0; border: 1px solid #4ec9b033; }
+.tool-btn.bulk:hover { background-color: #1e3a35; border-color: #4ec9b0; }
+.tool-btn.unity { color: #fff; background-color: #222c37; border: 1px solid #000; }
+.tool-btn.unity:hover { background-color: #000; color: #fff; border-color: #888; }
+.tool-btn.unreal { color: #fff; background-color: #0e1112; border: 1px solid #000; }
+.tool-btn.unreal:hover { background-color: #333; color: #fff; border-color: #888; }
+
+.toolbar-input {
+    width: 60px;
+    height: 28px;
+    background-color: #18191c;
+    border: 1px solid #3e3e42;
+    color: #fee75c; /* 강조 색상 (노랑) */
+    border-radius: 4px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 0 5px;
+    margin-left: 5px;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.toolbar-input:focus {
+    outline: none;
+    border-color: #5fabff;
+    background-color: #202225;
+}

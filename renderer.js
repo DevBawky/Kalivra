@@ -891,7 +891,14 @@ ipcRenderer.on('load-finished', (e, data) => {
 ipcRenderer.on('save-finished', (e, msg) => ModalSystem.alert(msg));
 ipcRenderer.on('export-finished', (e, msg) => ModalSystem.alert(msg));
 
-document.getElementById('calcBtn').addEventListener('click', runSimulation);
+const maxLevelInput = document.getElementById('maxLevel');
+maxLevelInput.addEventListener('input', () => {
+    debouncedSimulation(); 
+});
+maxLevelInput.addEventListener('change', () => {
+    runSimulation();
+});
+
 dom.metric.addEventListener('change', runSimulation);
 document.getElementById('addBtn').addEventListener('click', () => {
     const color = '#' + Math.floor(Math.random() * 16777215).toString(16);

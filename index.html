@@ -11,33 +11,22 @@
     <link rel="stylesheet" href="css/modules.css">
     
     <style>
-        /* 기존 스타일 유지 */
-        .chart-container { position: relative; flex: 1; min-height: 0; width: 100%; background-color: #202225; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
-        .modal-content { background-color: #2f3136; padding: 20px; border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); max-height: 95vh; overflow-y: auto; position: relative; }
+        .chart-container { 
+            position: relative; 
+            flex: 1; 
+            min-height: 0; 
+            width: 100%; 
+            background-color: #202225;
+            
+            box-sizing: border-box;
+            overflow: hidden;
+        }        
         .matrix-container { display: grid; gap: 2px; background-color: #111; border: 1px solid #444; overflow: auto; max-height: 600px; }
         .matrix-cell { display: flex; justify-content: center; align-items: center; font-size: 0.8em; color: #fff; cursor: pointer; transition: opacity 0.2s; position: relative; }
         .matrix-cell:hover { opacity: 0.8; z-index: 10; border: 1px solid #fff; }
         .matrix-header { background-color: #202225; font-weight: bold; color: #ccc; display: flex; justify-content: center; align-items: center; padding: 5px; text-align: center; position: sticky; z-index: 5; }
         .matrix-row-header { left: 0; }
         .matrix-col-header { top: 0; }
-        .top-toolbar { display: flex; align-items: center; gap: 15px; height: 40px; background-color: #252526; border-bottom: 1px solid #3e3e42; padding: 0 15px; box-sizing: border-box; user-select: none; }
-        .toolbar-group { display: flex; gap: 8px; }
-        .toolbar-divider { width: 1px; height: 20px; background-color: #454545; margin: 0 5px; }
-        .tool-btn { display: flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: 4px; background-color: transparent; color: #cccccc; font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
-        .tool-btn:hover { background-color: #3e3e42; color: white; border: 1px solid #555; }
-        .tool-btn.primary { color: #5fabff; font-weight: bold; }
-        .tool-btn.warning { color: #d29922; }
-        .tool-btn.success { color: #2da44e; }
-        .tool-btn.secondary { color: #b9bbbe; }
-        .tool-btn.unity { color: #fff; background-color: #222c37; border: 1px solid #000; }
-        .tool-btn.unity:hover { background-color: #000; color: #fff; border-color: #888; }
-        .tool-btn.unreal { color: #fff; background-color: #0e1112; border: 1px solid #000; }
-        .tool-btn.unreal:hover { background-color: #333; color: #fff; border-color: #888; }
-        /* [NEW] Bulk Edit Button Style */
-        .tool-btn.bulk { color: #4ec9b0; border: 1px solid #4ec9b033; }
-        .tool-btn.bulk:hover { background-color: #1e3a35; border-color: #4ec9b0; }
-
         .desc-input { width: 100%; height: 80px; background-color: #1e1e1e; border: 1px solid #3e3e42; color: #ccc; padding: 8px; font-family: monospace; resize: vertical; }
         .stat-label-text { cursor: help; text-decoration: underline dotted #666; }
         .input-error { border: 2px solid #e74c3c !important; background-color: #3a1d1d !important; color: #ffcccc !important; }
@@ -49,8 +38,8 @@
         .snapshot-date { font-size: 0.8em; color: #888; }
         .snapshot-actions button { background: none; border: none; cursor: pointer; color: #888; margin-left: 5px; }
         .snapshot-actions button:hover { color: #fff; }
-
-        /* [NEW] Grid Table Styles */
+        
+        /* Grid Table Styles */
         .bulk-table { width: 100%; border-collapse: collapse; background: #1e1e1e; color: #ccc; font-size: 0.9em; min-width: 800px; }
         .bulk-table th, .bulk-table td { border: 1px solid #333; padding: 6px 8px; text-align: center; }
         .bulk-table th { background: #252526; position: sticky; top: 0; z-index: 10; font-weight: bold; color: #eee; text-align: center; }
@@ -71,42 +60,39 @@
 
     <div class="top-toolbar">
         <div class="toolbar-group">
-            <button id="calcBtn" class="tool-btn primary"><span>▶</span> Run Simulation</button>
-            <button id="exportBtn" class="tool-btn warning"><span>📄</span> Export CSV</button>
+            <button id="saveBtn" class="tool-btn success" title="Save Project (Ctrl+S)"><span>💾</span> Save</button>
+            <button id="loadBtn" class="tool-btn secondary" title="Load Project"><span>📂</span> Load</button>
+            <button id="configBtn" class="tool-btn secondary" title="Project Config"><span>⚙️</span> Config</button>
         </div>
+
         <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-            <button id="saveBtn" class="tool-btn success"><span>💾</span> Save</button>
-            <button id="loadBtn" class="tool-btn secondary"><span>📂</span> Load</button>
+
+        <div class="toolbar-group" style="display: flex; align-items: center; width: 140px; gap: 0;">
+            <span style="flex: 6.5; font-size: 0.85em; color: #b9bbbe; font-weight: bold; white-space: nowrap; text-align: right; padding-right: 8px;">Max Level:</span>
+            <input type="number" id="maxLevel" value="20" class="toolbar-input" style="flex: 3.5; width: 0; min-width: 0; text-align: center; padding: 0 4px; margin: 0;" title="Change to Auto-Simulate">
         </div>
+
         <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-            <button id="snapshotBtn" class="tool-btn" style="color: #d7ba7d;"><span>📷</span> Snapshots</button>
-        </div>
-        <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-            <button id="unityBtn" class="tool-btn unity"><span style="color:#fff;">🎮</span> Unity</button>
-            <button id="unrealBtn" class="tool-btn unreal"><span style="color:#fff;">ⓤ</span> Unreal</button>
-        </div>
-        <div class="toolbar-divider"></div>
+
         <div class="toolbar-group">
             <button id="bulkEditBtn" class="tool-btn bulk"><span>📊</span> Bulk Edit</button>
+            <button id="snapshotBtn" class="tool-btn" style="color: #d7ba7d;"><span>📷</span> Snapshots</button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <div class="toolbar-group">
+            <button id="exportBtn" class="tool-btn warning"><span>📄</span> Export ▼</button>
+            <button id="unityBtn" class="tool-btn unity" title="Export for Unity"><span style="color:#fff;">🎮</span></button>
+            <button id="unrealBtn" class="tool-btn unreal" title="Export for Unreal"><span style="color:#fff;">ⓤ</span></button>
         </div>
     </div>
 
     <div class="app-container">
         <div class="sidebar" id="leftSidebar">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>Global Settings</h2>
-                <button id="configBtn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">Config</button>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                <label style="margin:0; width: 80px;">Max Level:</label>
-                <input type="number" id="maxLevel" value="20">
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h2>Entities</h2>
-                <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e;">+ Add</button>
+                <button id="addBtn" style="width: auto; padding: 4px 10px; font-size: 0.8em; background-color:#2da44e; border:none; border-radius:3px; color:white; cursor:pointer; font-weight:bold;">+ Add</button>
             </div>
             <div id="entityContainer"></div>
         </div>
@@ -132,7 +118,7 @@
                     </div>
                 </div>
                 <div id="analysisLog" class="log-container">
-                    <div class="log-item placeholder">Run simulation to see analysis...</div>
+                    <div class="log-item placeholder">Analysis will appear here...</div>
                 </div>
             </div>
         </div>
@@ -247,7 +233,7 @@
             </div>
 
             <div id="gridContainer" style="flex:1; overflow:auto; background:#1e1e1e; border:1px solid #3e3e42;">
-                </div>
+            </div>
         </div>
     </div>
 
