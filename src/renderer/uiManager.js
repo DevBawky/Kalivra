@@ -76,8 +76,9 @@ function renderEntityCard(ent, index, container, callbacks) {
         const desc = rules.descriptions && rules.descriptions[s] ? rules.descriptions[s] : s.toUpperCase();
         statsHtml += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:5px;">
             <span class="stat-label-text" title="${desc}" style="width:40px; font-size:0.8em; font-weight:bold; color:#b9bbbe;">${s.toUpperCase()}</span>
-            <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:60px;" ${disabledAttr}>
-            <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:60px;" ${disabledAttr}>
+            <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:50px;" ${disabledAttr}>
+            <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:50px;" ${disabledAttr}>
+            <button class="solver-btn" data-ent-idx="${index}" data-stat="${s}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; font-size:.7em; padding:0 2px;">✨</button>
         </div>`;
     });
     
@@ -103,17 +104,22 @@ function renderEntityCard(ent, index, container, callbacks) {
     if (!isLocked) {
         const typeBtn = card.querySelector('.type-btn');
         typeBtn.addEventListener('click', () => { 
-            ent.attackType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee'; 
+            const oldType = ent.attackType;
+            const newType = ent.attackType === 'Melee' ? 'Ranged' : 'Melee'; 
             
-            typeBtn.innerText = ent.attackType === 'Ranged' ? '🏹' : '⚔️';
-            typeBtn.title = ent.attackType === 'Ranged' ? 'Ranged (원거리)' : 'Melee (근거리)';
-            
-            callbacks.onInput(); 
+            if(callbacks.onCommit) callbacks.onCommit('attackType', oldType, newType);
         });
 
         card.querySelector('.delete-btn').addEventListener('click', () => callbacks.onDelete(index));
         card.querySelectorAll('.prop-input').forEach(el => { attachChangeHandlers(el, (e) => { const key = e.target.dataset.key; ent[key] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { callbacks.onCommit(el.dataset.key, oldVal, newVal); }); });
         card.querySelectorAll('.stat-input').forEach(el => { attachChangeHandlers(el, (e) => { const s = e.target.dataset.stat; const t = e.target.dataset.type; if(!ent.stats[s]) ent.stats[s] = {b:0,g:0}; ent.stats[s][t] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { const s = el.dataset.stat; const t = el.dataset.type; callbacks.onStatCommit(ent.stats[s], t, parseFloat(oldVal), parseFloat(newVal)); }); });
+        card.querySelectorAll('.solver-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (callbacks.onSolver) {
+                    callbacks.onSolver(btn.dataset.stat);
+                }
+            });
+        });
     }
     container.appendChild(card);
 }
@@ -174,28 +180,87 @@ function renderItemCard(item, index, container, callbacks) {
     card.querySelectorAll('.remove-stat-btn').forEach(btn => btn.addEventListener('click', e => callbacks.onModDelete(parseInt(e.target.dataset.idx))));
     card.querySelector('.delete-item-btn').addEventListener('click', () => callbacks.onDelete(index));
     card.querySelectorAll('.mod-input').forEach(el => { attachChangeHandlers(el, (e) => { const idx = parseInt(e.target.dataset.idx); item.modifiers[idx][e.target.dataset.key] = getSafeVal(e.target); callbacks.onInput(); }, (oldVal, newVal) => { const idx = parseInt(el.dataset.idx); callbacks.onModCommit(item.modifiers[idx], el.dataset.key, oldVal, newVal); }); });
-    card.querySelectorAll('.target-select').forEach(el => el.addEventListener('change', e => { const id = parseInt(e.target.dataset.entId); item.targets = e.target.checked ? [...item.targets, id] : item.targets.filter(t => t !== id); callbacks.onChange(); }));
-    card.querySelector('.add-trait-btn').addEventListener('click', () => { item.traits.push({ name: "New Effect", triggers: [{ type: "OnAttackHit", conditions: [{ type: "Chance", value: 50, target: "Self" }], effects: [{ type: "Heal", target: "Self", valueType: "Fixed", value: 10, op: "add" }] }] }); callbacks.onUpdate(); });
-    card.querySelectorAll('.remove-trait-btn').forEach(btn => { btn.addEventListener('click', (e) => { item.traits.splice(parseInt(e.target.dataset.idx), 1); callbacks.onUpdate(); }); });
-    card.querySelectorAll('.trait-name-input').forEach(el => { el.addEventListener('change', (e) => { item.traits[parseInt(e.target.dataset.idx)].name = e.target.value; callbacks.onInput(); }); });
-    const updateTraitData = (el) => { const idx = parseInt(el.dataset.idx); const role = el.dataset.role; const val = getSafeVal(el); const trait = item.traits[idx]; const eff = trait.triggers[0].effects[0]; const cond = trait.triggers[0].conditions[0]; const trig = trait.triggers[0];
-        switch(role) { case 'trigger': trig.type = val; break; case 'condType': cond.type = val; break; case 'condVal': cond.value = val; break; case 'effType': eff.type = val; if(val === 'BuffStat' && !eff.stat) eff.stat = DM.getRules().stats[0]; callbacks.onUpdate(); return; case 'effTarget': eff.target = val; break; case 'effVal': eff.value = val; break; case 'effValType': eff.valueType = val; break; case 'effOp': eff.op = val; break; case 'effStat': eff.stat = val; break; case 'effDuration': eff.duration = val; break; } callbacks.onInput(); };
-    card.querySelectorAll('.trait-select, .trait-input').forEach(el => { el.addEventListener('change', (e) => updateTraitData(e.target)); });
+
+    // [Undo/Redo] Target Checkbox Logic
+    card.querySelectorAll('.target-select').forEach(el => el.addEventListener('change', e => { 
+        const id = parseInt(e.target.dataset.entId);
+        const oldTargets = [...item.targets];
+        let newTargets;
+        if (e.target.checked) newTargets = [...oldTargets, id];
+        else newTargets = oldTargets.filter(t => t !== id);
+        if (callbacks.onTargetCommit) callbacks.onTargetCommit(oldTargets, newTargets);
+    }));
+
+    // [Undo/Redo] Trait Logic
+    card.querySelector('.add-trait-btn').addEventListener('click', () => { 
+        const newTrait = { name: "New Effect", triggers: [{ type: "OnAttackHit", conditions: [{ type: "Chance", value: 50, target: "Self" }], effects: [{ type: "Heal", target: "Self", valueType: "Fixed", value: 10, op: "add" }] }] };
+        if(callbacks.onTraitAdd) callbacks.onTraitAdd(newTrait); 
+    });
+    
+    card.querySelectorAll('.remove-trait-btn').forEach(btn => { 
+        btn.addEventListener('click', (e) => { 
+            if(callbacks.onTraitDelete) callbacks.onTraitDelete(parseInt(e.target.dataset.idx)); 
+        }); 
+    });
+    
+    card.querySelectorAll('.trait-name-input').forEach(el => { 
+        el.addEventListener('change', (e) => { 
+            const idx = parseInt(e.target.dataset.idx);
+            const oldTrait = JSON.parse(JSON.stringify(item.traits[idx]));
+            const newTrait = JSON.parse(JSON.stringify(item.traits[idx]));
+            newTrait.name = e.target.value; 
+            if(callbacks.onTraitCommit) callbacks.onTraitCommit(idx, oldTrait, newTrait);
+        }); 
+    });
+
+    const updateTraitData = (el) => { 
+        const idx = parseInt(el.dataset.idx); 
+        const role = el.dataset.role; 
+        const val = getSafeVal(el); 
+        const oldTrait = JSON.parse(JSON.stringify(item.traits[idx]));
+        const newTrait = JSON.parse(JSON.stringify(item.traits[idx]));
+        const eff = newTrait.triggers[0].effects[0]; 
+        const cond = newTrait.triggers[0].conditions[0]; 
+        const trig = newTrait.triggers[0];
+
+        switch(role) { 
+            case 'trigger': trig.type = val; break; 
+            case 'condType': cond.type = val; break; 
+            case 'condVal': cond.value = val; break; 
+            case 'effType': eff.type = val; if(val === 'BuffStat' && !eff.stat) eff.stat = DM.getRules().stats[0]; break; 
+            case 'effTarget': eff.target = val; break; 
+            case 'effVal': eff.value = val; break; 
+            case 'effValType': eff.valueType = val; break; 
+            case 'effOp': eff.op = val; break; 
+            case 'effStat': eff.stat = val; break; 
+            case 'effDuration': eff.duration = val; break; 
+        } 
+        if(callbacks.onTraitCommit) callbacks.onTraitCommit(idx, oldTrait, newTrait);
+    };
+
+    card.querySelectorAll('.trait-select, .trait-input').forEach(el => { 
+        el.addEventListener('change', (e) => updateTraitData(e.target)); 
+    });
     container.appendChild(card);
 }
 
-// [NEW] Bulk Grid Renderer
-function renderBulkGrid(container, onSelectionChange) {
+function renderBulkGrid(container, onSelectionChange, preSelectedIds = []) {
     const entities = DM.getEntities();
     const stats = DM.getRules().stats;
     
-    let html = `<table class="bulk-table"><thead><tr><th><input type="checkbox" id="selectAllBulk"></th><th>Name</th>`;
+    const allSelected = entities.length > 0 && entities.every(e => preSelectedIds.includes(e.id));
+    
+    let html = `<table class="bulk-table"><thead><tr><th><input type="checkbox" id="selectAllBulk" ${allSelected ? 'checked' : ''}></th><th>Name</th>`;
     stats.forEach(s => html += `<th>${s.toUpperCase()} (Base)</th>`);
     html += `</tr></thead><tbody>`;
 
     entities.forEach(ent => {
-        html += `<tr data-id="${ent.id}">
-            <td><input type="checkbox" class="row-select" data-id="${ent.id}"></td>
+        const isChecked = preSelectedIds.includes(ent.id);
+        const checkedStr = isChecked ? 'checked' : '';
+        const rowClass = isChecked ? 'selected' : '';
+
+        html += `<tr data-id="${ent.id}" class="${rowClass}">
+            <td><input type="checkbox" class="row-select" data-id="${ent.id}" ${checkedStr}></td>
             <td>${ent.name}</td>`;
         stats.forEach(s => {
             const val = ent.stats[s]?.b || 0;
@@ -206,18 +271,20 @@ function renderBulkGrid(container, onSelectionChange) {
     html += `</tbody></table>`;
     container.innerHTML = html;
 
-    // Grid Listeners
     const rows = container.querySelectorAll('tbody tr');
     const updateSelection = () => {
         const selected = Array.from(container.querySelectorAll('.row-select:checked')).map(el => parseInt(el.dataset.id));
+        
         rows.forEach(r => {
             const isSel = selected.includes(parseInt(r.dataset.id));
             if(isSel) r.classList.add('selected'); else r.classList.remove('selected');
         });
+        
         onSelectionChange(selected);
     };
 
     container.querySelectorAll('.row-select').forEach(cb => cb.addEventListener('change', updateSelection));
+    
     container.querySelector('#selectAllBulk').addEventListener('change', (e) => {
         container.querySelectorAll('.row-select').forEach(cb => cb.checked = e.target.checked);
         updateSelection();

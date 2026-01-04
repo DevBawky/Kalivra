@@ -1,8 +1,5 @@
 const Sim = require('./calculator');
 
-// ==========================================
-// [Helper] 버프 지속시간 관리
-// ==========================================
 function processBuffDurations(actor, turn, addLogFunc) {
     if (!actor.activeBuffs || actor.activeBuffs.length === 0) return;
 
@@ -17,16 +14,12 @@ function processBuffDurations(actor, turn, addLogFunc) {
     }
 }
 
-/**
- * 단일 전투 시뮬레이션 (Chance Condition Fix)
- */
 function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = false) {
     const initFighter = (ent, stats) => ({
         ...ent, currentStats: { ...stats }, currentHp: stats.hp || 100, traits: ent.traits || [], activeBuffs: [],
         tracker: { attacks: 0, crits: 0, hits: 0, misses: 0, damageDealt: 0, overkill: 0 }
     });
 
-    // [수정 완료] rules -> dmgFormula로 변경 (이 부분이 원인이었습니다)
     const gameRules = (typeof dmgFormula === 'string') 
         ? { dmgFormula: dmgFormula, hitFormula: "(a.acc - b.eva)" } 
         : dmgFormula;
@@ -47,15 +40,10 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         logs.push({ turn, actor: actor ? actor.name : 'System', target: target ? target.name : null, action, val, msg });
     };
 
-    // ==========================================
-    // [Core] Trigger Engine
-    // ==========================================
     const BattleSystem = {
         normalizeString: (str) => {
             if (!str) return "";
             const s = str.toLowerCase().replace(/\s+/g, ""); 
-            
-            // Trigger Mappings
             if (s.includes("onhittaken") || s.includes("ondamagetaken") || s.includes("피격")) return "OnHitTaken";
             if (s.includes("onattackhit") || s.includes("적중")) return "OnAttackHit";
             if (s.includes("onbeforeattack") || s.includes("공격전")) return "OnBeforeAttack";
@@ -65,25 +53,19 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             if (s.includes("onturnstart")) return "OnTurnStart";
             if (s.includes("onturnend")) return "OnTurnEnd";
             if (s.includes("onbattlestart")) return "OnBattleStart";
-            
-            // Effect & Value Type Mappings
             if (s.includes("heal")) return "Heal";
             if (s.includes("modifydamage")) return "ModifyDamage";
             if (s.includes("dealdamage")) return "DealDamage";
             if (s.includes("buff")) return "BuffStat";
             if (s.includes("percent") || s.includes("%")) return "PercentOfDamage";
-
-            // Condition Type Mappings
             if (s.includes("chance")) return "chance";
             if (s.includes("hp") && s.includes("less")) return "hplessthen";
             if (s.includes("always")) return "always";
-            
             return str;
         },
 
         processTriggers: (triggerName, owner, context, allowedTypes = null) => {
             if (!owner.traits || owner.traits.length === 0) return;
-
             owner.traits.forEach(trait => {
                 if (!trait.triggers) return;
                 trait.triggers.filter(t => BattleSystem.normalizeString(t.type) === triggerName).forEach(trig => {
@@ -164,9 +146,6 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         }
     };
 
-    // ==========================================
-    // 공격 처리
-    // ==========================================
     const processAttack = (attacker, defender) => {
         const aStats = attacker.currentStats;
         const bStats = defender.currentStats;
@@ -178,12 +157,8 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             isCrit: false 
         };
 
-        // 0. 공격 전 트리거
         BattleSystem.processTriggers("OnBeforeAttack", attacker, context);
 
-        // ===============================================
-        // 1. 명중(Hit) 공식 계산
-        // ===============================================
         let hitChance = 0;
         try {
             hitChance = Sim.calculateValue(gameRules.hitFormula, { a: aStats, b: bStats });
@@ -195,7 +170,6 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
 
         hitChance = Math.max(5, Math.min(100, hitChance));
 
-        // 회피 판정
         if (Math.random() * 100 > hitChance) {
             addLog(turn, attacker, defender, 'miss', 0, 'Missed!');
             attacker.tracker.misses++; 
@@ -204,9 +178,6 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             return; 
         }
 
-        // ===============================================
-        // 2. 데미지 계산
-        // ===============================================
         let rawDmg = 0;
         try { 
             rawDmg = Sim.calculateValue(gameRules.dmgFormula, { a: aStats, b: bStats }); 
@@ -215,7 +186,6 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         const variance = attacker.variance || 0;
         if (variance > 0) rawDmg *= (1 + (Math.random() * variance * 2 - variance));
 
-        // 3. 크리티컬 체크
         const criChance = aStats.cric !== undefined ? aStats.cric : (aStats.cri || 0);
         if (Math.random() * 100 < criChance) {
             context.isCrit = true;
@@ -223,11 +193,9 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             attacker.tracker.crits++;
         }
 
-        // 4. [Phase 1] 피격 시 (데미지 확정 전)
         context.damage = Math.floor(rawDmg);
         BattleSystem.processTriggers("OnHitTaken", defender, context, ["ModifyDamage", "BuffStat"]);
 
-        // 5. 최종 데미지 적용
         rawDmg = (rawDmg * context.damageMultiplier) + context.damageBonus;
         let finalDmg = Math.floor(rawDmg);
         if (finalDmg < 0) finalDmg = 0;
@@ -241,17 +209,14 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         if (context.isCrit) msg += " (Critical!)";
         addLog(turn, attacker, defender, 'attack', finalDmg, msg);
 
-        // 6. [Phase 2] 피격 시 (데미지 적용 후)
         BattleSystem.processTriggers("OnHitTaken", defender, context, ["Heal", "DealDamage", "BuffStat"]);
 
-        // 7. 적중 시 & 크리티컬 시 트리거
         BattleSystem.processTriggers("OnAttackHit", attacker, context);
         if (context.isCrit) {
             BattleSystem.processTriggers("OnCritical", attacker, context);
         }
     };
 
-    // Main Loop
     const aspdA = fighterA.currentStats.aspd || 1;
     const aspdB = fighterB.currentStats.aspd || 1;
     const totalSpeed = aspdA + aspdB;
@@ -335,4 +300,31 @@ function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula) {
     };
 }
 
-module.exports = { simulateBattle, runBattleBatch, runMonteCarlo };
+function runPhaseAnalysis(battleEntA, battleEntB, allItems, rules, maxLevel) {
+    const phases = {
+        Early: { min: 1, max: Math.floor(maxLevel * 0.33), wins: 0, total: 0 },
+        Mid: { min: Math.floor(maxLevel * 0.33) + 1, max: Math.floor(maxLevel * 0.66), wins: 0, total: 0 },
+        Late: { min: Math.floor(maxLevel * 0.66) + 1, max: maxLevel, wins: 0, total: 0 }
+    };
+
+    const RUNS_PER_LEVEL = 10; 
+
+    for (let lv = 1; lv <= maxLevel; lv++) {
+        let phaseName = 'Late';
+        if (lv <= phases.Early.max) phaseName = 'Early';
+        else if (lv <= phases.Mid.max) phaseName = 'Mid';
+
+        const statsA = Sim.getStatsAtLevel(battleEntA, lv, allItems, rules);
+        const statsB = Sim.getStatsAtLevel(battleEntB, lv, allItems, rules);
+
+        for (let i = 0; i < RUNS_PER_LEVEL; i++) {
+            const res = simulateBattle(battleEntA, statsA, battleEntB, statsB, rules, false);
+            if (res.winnerId === battleEntA.id) phases[phaseName].wins++;
+            phases[phaseName].total++;
+        }
+    }
+
+    return phases;
+}
+
+module.exports = { simulateBattle, runBattleBatch, runMonteCarlo, runPhaseAnalysis };

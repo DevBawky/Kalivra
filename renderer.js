@@ -5,36 +5,16 @@ const UI = require('./src/renderer/uiManager');
 const Charts = require('./src/renderer/chartManager');
 const Utils = require('./src/renderer/utils');
 const Battle = require('./src/renderer/battle');
+const Solver = require('./src/renderer/solver');
 
 const FORMULA_PRESETS = [
-    {
-        name: "Standard (Effective HP)",
-        desc: "Defense increases HP as %. Stable scaling.",
-        dmg: "atk * (100 / (100 + def))",
-        hit: "a.acc - b.eva",
-        cp: "hp * 0.5 + atk * 2 + def * 1.5 + acc + eva + aspd * 5"
-    },
-    {
-        name: "Classic (Subtraction)",
-        desc: "ATK minus DEF. Includes min damage check.",
-        dmg: "(atk - def) > 1 ? (atk - def) : 1",
-        hit: "a.acc - b.eva",
-        cp: "hp + atk + def + acc + eva + aspd * 10"
-    },
-    {
-        name: "Simple Percent",
-        desc: "1 Def = 1% reduction. Needs capping.",
-        dmg: "atk * (1 - (def / 100))",
-        hit: "a.acc * (1 - (b.eva / 100))",
-        cp: "hp * 0.5 + atk * 1.5 + def * 2 + acc + eva"
-    }
+    { name: "Standard (Effective HP)", desc: "Defense increases HP as %. Stable scaling.", dmg: "atk * (100 / (100 + def))", hit: "a.acc - b.eva", cp: "hp * 0.5 + atk * 2 + def * 1.5 + acc + eva + aspd * 5" },
+    { name: "Classic (Subtraction)", desc: "ATK minus DEF. Includes min damage check.", dmg: "(atk - def) > 1 ? (atk - def) : 1", hit: "a.acc - b.eva", cp: "hp + atk + def + acc + eva + aspd * 10" },
+    { name: "Simple Percent", desc: "1 Def = 1% reduction. Needs capping.", dmg: "atk * (1 - (def / 100))", hit: "a.acc * (1 - (b.eva / 100))", cp: "hp * 0.5 + atk * 1.5 + def * 2 + acc + eva" }
 ];
 
 const ModalSystem = {
-    overlay: null,
-    msgEl: null,
-    actionsEl: null,
-
+    overlay: null, msgEl: null, actionsEl: null,
     init() {
         if (document.getElementById('custom-modal-overlay')) {
             this.overlay = document.getElementById('custom-modal-overlay');
@@ -42,175 +22,73 @@ const ModalSystem = {
             this.actionsEl = this.overlay.querySelector('#custom-modal-actions');
             return;
         }
-        
-        const css = `
-            #custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 20000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-            #custom-modal-box { background: #1e1e1e; border: 1px solid #454545; padding: 25px; width: 850px; border-radius: 8px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 15px; max-height: 85vh; }
-            #custom-modal-msg { color: #eee; font-size: 14px; white-space: pre-wrap; line-height: 1.5; overflow-y: auto; }
-            #custom-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; }
-            
-            .custom-modal-btn { background: #3e3e42; color: #fff; border: 1px solid #555; padding: 8px 20px; cursor: pointer; border-radius: 4px; font-size: 13px; min-width: 80px; transition: background 0.2s; }
-            .custom-modal-btn:hover { background: #505055; }
-            .custom-modal-btn.primary { background: #007acc; border-color: #007acc; }
-            .custom-modal-btn.primary:hover { background: #0062a3; }
-            
-            .preset-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-height: 500px; overflow-y: auto; padding-right: 5px; }
-            .preset-item { background: #252526; padding: 15px; border: 1px solid #3e3e42; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
-            .preset-item:hover { background: #2d2d30; border-color: #007acc; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-            .preset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-            .preset-name { font-weight: bold; color: #4fc1ff; font-size: 1.1em; }
-            .preset-desc { font-size: 0.85em; color: #cccccc; margin-bottom: 8px; line-height: 1.4; height: 32px; overflow: hidden; }
-            .preset-code-box { background: #111; padding: 8px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.75em; color: #dcdcaa; border: 1px solid #333; }
-            .preset-label { color: #569cd6; margin-right: 5px; }
-            .del-preset-btn { position: absolute; top: 10px; right: 10px; color: #666; background: none; border: none; font-size: 1.2em; cursor: pointer; padding: 0 5px; z-index: 10; }
-            .del-preset-btn:hover { color: #ce3838; }
-            .label-error { color: #ff6b6b !important; font-weight: bold; transition: color 0.2s; }
-            .input-error { border-color: #ff6b6b !important; background-color: rgba(255, 107, 107, 0.1) !important; }
-
-            .nav-dropdown { position: relative; display: inline-block; }
-            .dropdown-content { display: none; position: absolute; right: 0; background-color: #252526; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5); z-index: 1000; border: 1px solid #454545; border-radius: 4px; }
-            .dropdown-content button { color: #ccc; padding: 12px 16px; text-decoration: none; display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer; font-size: 13px; }
-            .dropdown-content button:hover { background-color: #3e3e42; color: white; }
-            .show-dropdown { display: block; }
-        `;
-        const style = document.createElement('style'); 
-        style.textContent = css; 
-        document.head.appendChild(style);
-
-        const overlay = document.createElement('div'); 
-        overlay.id = 'custom-modal-overlay';
+        const css = `#custom-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:20000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}#custom-modal-box{background:#1e1e1e;border:1px solid #454545;padding:25px;width:850px;border-radius:8px;box-shadow:0 20px 40px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:15px;max-height:85vh}#custom-modal-msg{color:#eee;font-size:14px;white-space:pre-wrap;line-height:1.5;overflow-y:auto}#custom-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #333}.custom-modal-btn{background:#3e3e42;color:#fff;border:1px solid #555;padding:8px 20px;cursor:pointer;border-radius:4px;font-size:13px;min-width:80px;transition:background 0.2s}.custom-modal-btn:hover{background:#505055}.custom-modal-btn.primary{background:#007acc;border-color:#007acc}.custom-modal-btn.primary:hover{background:#0062a3}.custom-modal-btn.warning{border-color:#e74c3c;color:#e74c3c}.custom-modal-btn.warning:hover{background:#3a1d1d}.preset-list{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-height:500px;overflow-y:auto;padding-right:5px}.preset-item{background:#252526;padding:15px;border:1px solid #3e3e42;border-radius:6px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;justify-content:space-between;position:relative}.preset-item:hover{background:#2d2d30;border-color:#007acc;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.2)}.preset-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}.preset-name{font-weight:bold;color:#4fc1ff;font-size:1.1em}.preset-desc{font-size:0.85em;color:#cccccc;margin-bottom:8px;line-height:1.4;height:32px;overflow:hidden}.preset-code-box{background:#111;padding:8px;border-radius:4px;font-family:'Consolas',monospace;font-size:0.75em;color:#dcdcaa;border:1px solid #333}.preset-label{color:#569cd6;margin-right:5px}.del-preset-btn{position:absolute;top:10px;right:10px;color:#666;background:none;border:none;font-size:1.2em;cursor:pointer;padding:0 5px;z-index:10}.del-preset-btn:hover{color:#ce3838}.label-error{color:#ff6b6b!important;font-weight:bold;transition:color 0.2s}.input-error{border-color:#ff6b6b!important;background-color:rgba(255,107,107,0.1)!important}.nav-dropdown{position:relative;display:inline-block}.dropdown-content{display:none;position:absolute;right:0;background-color:#252526;min-width:160px;box-shadow:0px 8px 16px 0px rgba(0,0,0,0.5);z-index:1000;border:1px solid #454545;border-radius:4px}.dropdown-content button{color:#ccc;padding:12px 16px;text-decoration:none;display:block;width:100%;text-align:left;background:none;border:none;cursor:pointer;font-size:13px}.dropdown-content button:hover{background-color:#3e3e42;color:white}.show-dropdown{display:block}`;
+        const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
+        const overlay = document.createElement('div'); overlay.id = 'custom-modal-overlay';
         overlay.innerHTML = `<div id="custom-modal-box"><div id="custom-modal-msg"></div><div id="custom-modal-actions"></div></div>`;
         document.body.appendChild(overlay);
-
-        this.overlay = overlay;
-        this.msgEl = overlay.querySelector('#custom-modal-msg');
-        this.actionsEl = overlay.querySelector('#custom-modal-actions');
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.overlay.style.display === 'flex') this.close();
-        });
+        this.overlay = overlay; this.msgEl = overlay.querySelector('#custom-modal-msg'); this.actionsEl = overlay.querySelector('#custom-modal-actions');
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.overlay.style.display === 'flex') this.close(); });
     },
-
     show(msg, type, onConfirm, onCancel) {
         if (!this.overlay) this.init();
-
         this.msgEl.innerHTML = typeof msg === 'string' ? msg : '';
-        if (typeof msg !== 'string') {
-            this.msgEl.innerHTML = '';
-            this.msgEl.appendChild(msg);
-        }
+        if (typeof msg !== 'string') { this.msgEl.innerHTML = ''; this.msgEl.appendChild(msg); }
         this.actionsEl.innerHTML = '';
-        const box = document.getElementById('custom-modal-box');
-        box.style.width = (type === 'alert' || type === 'confirm') ? '400px' : '850px';
-
-        const okBtn = document.createElement('button');
-        okBtn.className = 'custom-modal-btn primary';
-        okBtn.textContent = type === 'confirm' ? 'Yes' : 'Close';
+        const box = document.getElementById('custom-modal-box'); box.style.width = (type === 'alert' || type === 'confirm') ? '400px' : '850px';
+        const okBtn = document.createElement('button'); okBtn.className = 'custom-modal-btn primary'; okBtn.textContent = type === 'confirm' ? 'Yes' : 'Close';
         okBtn.onclick = () => { this.close(); if (onConfirm) onConfirm(); };
-        
         if (type === 'confirm') {
-            const cancelBtn = document.createElement('button');
-            cancelBtn.className = 'custom-modal-btn';
-            cancelBtn.textContent = 'No';
+            const cancelBtn = document.createElement('button'); cancelBtn.className = 'custom-modal-btn'; cancelBtn.textContent = 'No';
             cancelBtn.onclick = () => { this.close(); if (onCancel) onCancel(); };
-            this.actionsEl.appendChild(okBtn);
-            this.actionsEl.appendChild(cancelBtn);
-        } else {
-            this.actionsEl.appendChild(okBtn);
-            okBtn.focus();
-        }
+            this.actionsEl.appendChild(okBtn); this.actionsEl.appendChild(cancelBtn);
+        } else { this.actionsEl.appendChild(okBtn); okBtn.focus(); }
         this.overlay.style.display = 'flex';
     },
-
     saveCurrentPreset() {
         const container = document.createElement('div');
-        
-        const label = document.createElement('div');
-        label.innerText = "Enter a name for this formula preset:";
-        label.style.marginBottom = "10px";
-        label.style.color = "#ccc";
-        container.appendChild(label);
-
-        const input = document.createElement('input');
-        input.type = "text";
-        input.style.cssText = "width: 100%; padding: 8px; background: #252526; border: 1px solid #454545; color: white; border-radius: 4px; outline: none;";
-        input.placeholder = "Preset Name";
-        
-        input.onkeydown = (e) => {
-            if(e.key === 'Enter') {
-                const primaryBtn = this.actionsEl.querySelector('.custom-modal-btn.primary');
-                if(primaryBtn) primaryBtn.click();
-            }
-        };
+        const label = document.createElement('div'); label.innerText = "Enter a name for this formula preset:"; label.style.marginBottom = "10px"; label.style.color = "#ccc"; container.appendChild(label);
+        const input = document.createElement('input'); input.type = "text"; input.style.cssText = "width: 100%; padding: 8px; background: #252526; border: 1px solid #454545; color: white; border-radius: 4px; outline: none;"; input.placeholder = "Preset Name";
+        input.onkeydown = (e) => { if(e.key === 'Enter') { const primaryBtn = this.actionsEl.querySelector('.custom-modal-btn.primary'); if(primaryBtn) primaryBtn.click(); } };
         container.appendChild(input);
-
         this.show(container, 'confirm', () => {
-            const name = input.value.trim();
-            if(!name) return;
-
-            const newPreset = {
-                name: name,
-                desc: "Custom User Preset",
-                dmg: document.getElementById('dmgFormula').value,
-                hit: document.getElementById('hitFormula').value,
-                cp: document.getElementById('cpFormula').value
-            };
-            
-            const saved = JSON.parse(localStorage.getItem('KAL_CUSTOM_PRESETS') || '[]');
-            saved.push(newPreset);
-            localStorage.setItem('KAL_CUSTOM_PRESETS', JSON.stringify(saved));
-            
+            const name = input.value.trim(); if(!name) return;
+            const newPreset = { name: name, desc: "Custom User Preset", dmg: document.getElementById('dmgFormula').value, hit: document.getElementById('hitFormula').value, cp: document.getElementById('cpFormula').value };
+            const saved = JSON.parse(localStorage.getItem('KAL_CUSTOM_PRESETS') || '[]'); saved.push(newPreset); localStorage.setItem('KAL_CUSTOM_PRESETS', JSON.stringify(saved));
             setTimeout(() => this.alert(`Preset "${name}" saved!`), 100);
         });
-
         setTimeout(() => input.focus(), 50);
     },
-
     showPresets(loadCallback) {
         const container = document.createElement('div');
-        const header = document.createElement('div');
-        header.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;";
-        header.innerHTML = '<span style="font-size:1.4em; font-weight:bold; color:#eee;">Formula Presets</span>';
-        container.appendChild(header);
-
+        const header = document.createElement('div'); header.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"; header.innerHTML = '<span style="font-size:1.4em; font-weight:bold; color:#eee;">Formula Presets</span>'; container.appendChild(header);
         const list = document.createElement('div'); list.className = 'preset-list';
         const savedPresets = JSON.parse(localStorage.getItem('KAL_CUSTOM_PRESETS') || '[]');
         const allPresets = [...FORMULA_PRESETS, ...savedPresets];
-
         allPresets.forEach((preset, idx) => {
             const isCustom = idx >= FORMULA_PRESETS.length;
             const item = document.createElement('div'); item.className = 'preset-item';
-            item.innerHTML = `
-                <div class="preset-header">
-                    <span class="preset-name">${preset.name} ${isCustom ? '<span style="font-size:0.7em; color:#dcdcaa;">(Custom)</span>' : ''}</span>
-                    ${isCustom ? `<button class="del-preset-btn" data-idx="${idx - FORMULA_PRESETS.length}">×</button>` : ''}
-                </div>
-                <div class="preset-desc">${preset.desc}</div>
-                <div class="preset-code-box">
-                    <div><span class="preset-label">DMG:</span>${preset.dmg}</div>
-                    <div style="margin-top:4px;"><span class="preset-label">CP:</span>${preset.cp}</div>
-                </div>
-            `;
-            item.onclick = (e) => { 
-                if(e.target.classList.contains('del-preset-btn')) return;
-                this.close(); if(loadCallback) loadCallback(preset); 
-            };
+            item.innerHTML = `<div class="preset-header"><span class="preset-name">${preset.name} ${isCustom ? '<span style="font-size:0.7em; color:#dcdcaa;">(Custom)</span>' : ''}</span>${isCustom ? `<button class="del-preset-btn" data-idx="${idx - FORMULA_PRESETS.length}">×</button>` : ''}</div><div class="preset-desc">${preset.desc}</div><div class="preset-code-box"><div><span class="preset-label">DMG:</span>${preset.dmg}</div><div style="margin-top:4px;"><span class="preset-label">CP:</span>${preset.cp}</div></div>`;
+            item.onclick = (e) => { if(e.target.classList.contains('del-preset-btn')) return; this.close(); if(loadCallback) loadCallback(preset); };
             if(isCustom) {
                 const delBtn = item.querySelector('.del-preset-btn');
-                delBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    const customIdx = parseInt(e.target.dataset.idx);
-                    const newSaved = savedPresets.filter((_, i) => i !== customIdx);
-                    localStorage.setItem('KAL_CUSTOM_PRESETS', JSON.stringify(newSaved));
-                    this.close(); setTimeout(() => this.showPresets(loadCallback), 50);
-                };
+                delBtn.onclick = (e) => { e.stopPropagation(); const customIdx = parseInt(e.target.dataset.idx); const newSaved = savedPresets.filter((_, i) => i !== customIdx); localStorage.setItem('KAL_CUSTOM_PRESETS', JSON.stringify(newSaved)); this.close(); setTimeout(() => this.showPresets(loadCallback), 50); };
             }
             list.appendChild(item);
         });
-        container.appendChild(list);
-        this.show(container, 'custom');
+        container.appendChild(list); this.show(container, 'custom');
     },
-
+    showExit(onSave, onDiscard) {
+        if (!this.overlay) this.init();
+        this.msgEl.innerText = "You have unsaved changes.\nDo you want to save before quitting?";
+        this.actionsEl.innerHTML = '';
+        const box = document.getElementById('custom-modal-box'); box.style.width = '400px';
+        const saveBtn = document.createElement('button'); saveBtn.className = 'custom-modal-btn primary'; saveBtn.textContent = 'Save & Quit'; saveBtn.onclick = () => { this.close(); onSave(); };
+        const discardBtn = document.createElement('button'); discardBtn.className = 'custom-modal-btn warning'; discardBtn.textContent = 'Discard & Quit'; discardBtn.onclick = () => { this.close(); onDiscard(); };
+        const cancelBtn = document.createElement('button'); cancelBtn.className = 'custom-modal-btn'; cancelBtn.textContent = 'Cancel'; cancelBtn.onclick = () => { this.close(); };
+        this.actionsEl.appendChild(saveBtn); this.actionsEl.appendChild(discardBtn); this.actionsEl.appendChild(cancelBtn);
+        this.overlay.style.display = 'flex'; saveBtn.focus();
+    },
     close() { if(this.overlay) this.overlay.style.display = 'none'; },
     alert(msg, cb) { this.show(msg, 'alert', cb); },
     confirm(msg, yes, no) { this.show(msg, 'confirm', yes, no); }
@@ -218,44 +96,21 @@ const ModalSystem = {
 
 function flashErrorOnLabel(inputElement, customMsg = "⚠ ERR") { 
     let label = inputElement.previousElementSibling; 
-    if (!label || label.tagName !== 'LABEL') { 
-        const parent = inputElement.parentElement; 
-        if (parent) label = parent.querySelector('label'); 
-    } 
-    
+    if (!label || label.tagName !== 'LABEL') { const parent = inputElement.parentElement; if (parent) label = parent.querySelector('label'); } 
     if (label) { 
         if (!label.getAttribute('data-original-text')) label.setAttribute('data-original-text', label.innerText);
         const originalText = label.getAttribute('data-original-text');
-        label.innerText = customMsg; 
-        label.classList.add('label-error'); 
-        inputElement.classList.add('input-error');
-        setTimeout(() => { 
-            label.innerText = originalText; 
-            label.classList.remove('label-error'); 
-            inputElement.classList.remove('input-error');
-        }, 2000); 
-    } else {
-        inputElement.classList.add('input-error');
-        setTimeout(() => inputElement.classList.remove('input-error'), 2000);
-    }
+        label.innerText = customMsg; label.classList.add('label-error'); inputElement.classList.add('input-error');
+        setTimeout(() => { label.innerText = originalText; label.classList.remove('label-error'); inputElement.classList.remove('input-error'); }, 2000); 
+    } else { inputElement.classList.add('input-error'); setTimeout(() => inputElement.classList.remove('input-error'), 2000); }
 }
 
 const checkFormula = (formula) => {
     if (!formula || formula.trim() === "") return { valid: false, error: "Empty" };
-    let depth = 0;
-    for (let char of formula) {
-        if (char === '(') depth++; else if (char === ')') depth--;
-        if (depth < 0) return { valid: false, error: "Too many ')'" };
-    }
+    let depth = 0; for (let char of formula) { if (char === '(') depth++; else if (char === ')') depth--; if (depth < 0) return { valid: false, error: "Too many ')'" }; }
     if (depth !== 0) return { valid: false, error: "Unmatched '('" };
     if (/[\+\-\*\/]\s*$/.test(formula)) return { valid: false, error: "Ends with Op" };
-    try {
-        const dummyFormula = formula.replace(/[a-zA-Z_][a-zA-Z0-9_.]*/g, '1');
-        const fn = new Function('return ' + dummyFormula);
-        fn(); 
-    } catch (err) {
-        return { valid: false, error: "Invalid Syntax" };
-    }
+    try { const dummyFormula = formula.replace(/[a-zA-Z_][a-zA-Z0-9_.]*/g, '1'); new Function('return ' + dummyFormula)(); } catch (err) { return { valid: false, error: "Invalid Syntax" }; }
     return { valid: true };
 };
 
@@ -292,84 +147,43 @@ const btnItemSet = document.getElementById('btnItemSet');
 const closeItemSet = document.querySelector('.close-itemset');
 const saveItemSetBtn = document.getElementById('saveItemSetBtn');
 const itemSetList = document.getElementById('itemSetList');
+const solverModal = document.getElementById('solverModal');
+let solverContext = null;
+
+let isProjectModified = false;
+function setModified(modified) {
+    isProjectModified = modified;
+    const titleEl = document.getElementById('appTitle');
+    if (titleEl) {
+        titleEl.innerText = modified ? 'Kalivra *' : 'Kalivra';
+        titleEl.style.color = modified ? '#e74c3c' : '#eee';
+    }
+}
 
 function injectComparisonUI() {
     const parent = dom.metric.parentElement;
     if (!parent || document.getElementById('compareSnapshotSelect')) return;
-
-    const wrapper = document.createElement('span');
-    wrapper.style.display = 'inline-flex';
-    wrapper.style.alignItems = 'center';
-
-    const select = document.createElement('select');
-    select.id = 'compareSnapshotSelect';
-    select.className = 'compare-select';
-    select.innerHTML = '<option value="-1">-- VS Snapshot --</option>';
-
-    select.addEventListener('change', (e) => {
-        comparisonSnapshotIndex = parseInt(e.target.value);
-        runSimulation();
-    });
-
-    wrapper.appendChild(select);
-    parent.appendChild(wrapper);
+    const wrapper = document.createElement('span'); wrapper.style.display = 'inline-flex'; wrapper.style.alignItems = 'center';
+    const select = document.createElement('select'); select.id = 'compareSnapshotSelect'; select.className = 'compare-select'; select.innerHTML = '<option value="-1">-- VS Snapshot --</option>';
+    select.addEventListener('change', (e) => { comparisonSnapshotIndex = parseInt(e.target.value); runSimulation(); });
+    wrapper.appendChild(select); parent.appendChild(wrapper);
 }
-
 function updateComparisonDropdown() {
-    const select = document.getElementById('compareSnapshotSelect');
-    if (!select) return;
-    const snapshots = DM.getSnapshots();
-    let html = '<option value="-1">-- VS Snapshot --</option>';
-    snapshots.forEach((snap, idx) => {
-        const date = new Date(snap.date).toLocaleDateString();
-        const selected = idx === comparisonSnapshotIndex ? 'selected' : '';
-        html += `<option value="${idx}" ${selected}>${snap.name} (${date})</option>`;
-    });
+    const select = document.getElementById('compareSnapshotSelect'); if (!select) return;
+    const snapshots = DM.getSnapshots(); let html = '<option value="-1">-- VS Snapshot --</option>';
+    snapshots.forEach((snap, idx) => { const date = new Date(snap.date).toLocaleDateString(); const selected = idx === comparisonSnapshotIndex ? 'selected' : ''; html += `<option value="${idx}" ${selected}>${snap.name} (${date})</option>`; });
     select.innerHTML = html;
 }
-
 function injectPresetButton() {
-    const dmgInput = document.getElementById('dmgFormula');
-    if (!dmgInput) return;
-
-    const existingGroup = document.getElementById('btnPresetGroup');
-    if (existingGroup) existingGroup.remove();
-
-    const btnGroup = document.createElement('div');
-    btnGroup.id = 'btnPresetGroup';
-    btnGroup.style.cssText = "display:flex; gap:10px; margin-bottom:8px; justify-content:flex-end;";
-
-    const btnSave = document.createElement('button');
-    btnSave.innerHTML = '💾 Save Preset';
-    btnSave.className = 'custom-modal-btn';
-    btnSave.style.cssText = "padding: 5px 12px; font-size: 0.8em; border-color:#4ecca3; color:#4ecca3; background:transparent; cursor:pointer;";
-    
-    btnSave.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ModalSystem.saveCurrentPreset();
-    };
-
-    const btnLoad = document.createElement('button');
-    btnLoad.innerHTML = '📚 Load Preset';
-    btnLoad.className = 'custom-modal-btn';
-    btnLoad.style.cssText = "padding: 5px 12px; font-size: 0.8em; border-color:#5fabff; color:#5fabff; background:transparent; cursor:pointer;";
-    btnLoad.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ModalSystem.showPresets((preset) => {
-            document.getElementById('dmgFormula').value = preset.dmg;
-            document.getElementById('hitFormula').value = preset.hit;
-            document.getElementById('cpFormula').value = preset.cp;
-            flashErrorOnLabel(document.getElementById('dmgFormula'), "Loaded!");
-        });
-    };
-
-    btnGroup.appendChild(btnSave);
-    btnGroup.appendChild(btnLoad);
-    dmgInput.parentElement.insertBefore(btnGroup, dmgInput);
+    const dmgInput = document.getElementById('dmgFormula'); if (!dmgInput) return;
+    const existingGroup = document.getElementById('btnPresetGroup'); if (existingGroup) existingGroup.remove();
+    const btnGroup = document.createElement('div'); btnGroup.id = 'btnPresetGroup'; btnGroup.style.cssText = "display:flex; gap:10px; margin-bottom:8px; justify-content:flex-end;";
+    const btnSave = document.createElement('button'); btnSave.innerHTML = '💾 Save Preset'; btnSave.className = 'custom-modal-btn'; btnSave.style.cssText = "padding: 5px 12px; font-size: 0.8em; border-color:#4ecca3; color:#4ecca3; background:transparent; cursor:pointer;";
+    btnSave.onclick = (e) => { e.preventDefault(); e.stopPropagation(); ModalSystem.saveCurrentPreset(); };
+    const btnLoad = document.createElement('button'); btnLoad.innerHTML = '📚 Load Preset'; btnLoad.className = 'custom-modal-btn'; btnLoad.style.cssText = "padding: 5px 12px; font-size: 0.8em; border-color:#5fabff; color:#5fabff; background:transparent; cursor:pointer;";
+    btnLoad.onclick = (e) => { e.preventDefault(); e.stopPropagation(); ModalSystem.showPresets((preset) => { document.getElementById('dmgFormula').value = preset.dmg; document.getElementById('hitFormula').value = preset.hit; document.getElementById('cpFormula').value = preset.cp; flashErrorOnLabel(document.getElementById('dmgFormula'), "Loaded!"); }); };
+    btnGroup.appendChild(btnSave); btnGroup.appendChild(btnLoad); dmgInput.parentElement.insertBefore(btnGroup, dmgInput);
 }
-
 function setupExportDropdown() {
     const oldBtn = document.getElementById('exportBtn');
     if (!oldBtn || oldBtn.parentElement.classList.contains('nav-dropdown')) return;
@@ -386,6 +200,15 @@ function setupExportDropdown() {
     contentDiv.id = 'exportDropdownContent';
     contentDiv.className = 'dropdown-content';
     
+    // [NEW] PDF Report Button
+    const btnPDF = document.createElement('button');
+    btnPDF.innerHTML = '📑 To PDF Report';
+    btnPDF.onclick = (e) => {
+        e.stopPropagation();
+        generateReport(); // 리포트 생성 호출
+        contentDiv.classList.remove('show-dropdown');
+    };
+
     const btnCSV = document.createElement('button');
     btnCSV.innerHTML = '📄 To CSV (Table)';
     btnCSV.onclick = (e) => {
@@ -402,6 +225,7 @@ function setupExportDropdown() {
         contentDiv.classList.remove('show-dropdown');
     };
 
+    contentDiv.appendChild(btnPDF);
     contentDiv.appendChild(btnCSV);
     contentDiv.appendChild(btnJSON);
     
@@ -427,58 +251,211 @@ function setupExportDropdown() {
     });
 }
 
-function exportToCSV() {
-    const entities = DM.getEntities();
-    const rules = DM.getRules();
-    const maxLv = parseInt(dom.maxLevel.value) || 20;
-    const metric = dom.metric.value; 
-    const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
+async function generateReport() {
+    if (!window.jspdf || !window.html2canvas) return ModalSystem.alert("Libraries missing");
 
-    let csv = `Level,Metric (${metric.toUpperCase()}),Formula: ${formula.replace(/,/g, ';')}\n`;
-    csv += "Level," + entities.map(e => e.name).join(',') + "\n";
-
-    for(let lv=1; lv <= maxLv; lv++){ 
-        const row = [lv];
-        entities.forEach(e => {
-            const stats = Sim.getStatsAtLevel(e, lv, DM.getItems(), rules);
-            let val = 0;
-            const dummyTarget = {};
-            if (rules.stats) rules.stats.forEach(s => dummyTarget[s] = 0);
-
-            try {
-                if (metric === 'cp') val = Sim.calculateValue(rules.cpFormula, stats);
-                else val = Sim.calculateValue(rules.dmgFormula, { a: stats, b: dummyTarget });
-            } catch (err) { val = 0; }
-            
-            row.push(val.toFixed(2)); 
-        });
-        csv += row.join(',') + "\n";
-    }
+    const { jsPDF } = window.jspdf;
+    const btn = document.querySelector('.dropbtn');
+    const originalText = btn ? btn.innerHTML : 'Export';
     
-    ipcRenderer.send('export-csv', csv);
+    if(btn) btn.innerHTML = '⏳ Processing...';
+    ModalSystem.alert("Generating Report...", null);
+
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+        const safeBottom = pageHeight - 20; 
+        const contentWidth = pageWidth - (margin * 2);
+
+        const entities = DM.getEntities();
+        const rules = DM.getRules();
+        const items = DM.getItems();
+        const lv = parseInt(document.getElementById('maxLevel').value) || 20;
+        
+        const matrixData = [];
+        const simCount = 50; 
+
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        for (let i = 0; i < entities.length; i++) {
+            const row = [];
+            const entA = entities[i];
+            const statsA = Sim.getStatsAtLevel(entA, lv, items, rules);
+            const eqItemsA = items.filter(it => it.active && it.targets.includes(entA.id));
+            const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...eqItemsA.flatMap(it=>it.traits||[])] };
+
+            for (let j = 0; j < entities.length; j++) {
+                if (i === j) {
+                    row.push(null); 
+                    continue;
+                }
+                const entB = entities[j];
+                const statsB = Sim.getStatsAtLevel(entB, lv, items, rules);
+                const eqItemsB = items.filter(it => it.active && it.targets.includes(entB.id));
+                const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...eqItemsB.flatMap(it=>it.traits||[])] };
+
+                const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, simCount, rules);
+                row.push(res.winRate);
+            }
+            matrixData.push(row);
+        }
+
+        const drawHeader = (title) => {
+            doc.setFillColor(32, 34, 37); 
+            doc.rect(0, 0, pageWidth, pageHeight, 'F');
+            doc.setFillColor(47, 49, 54); 
+            doc.rect(0, 0, pageWidth, 25, 'F');
+            doc.setFontSize(16);
+            doc.setTextColor(255, 255, 255);
+            doc.text("Kalivra Report", margin, 17);
+            doc.setFontSize(10);
+            doc.setTextColor(185, 187, 190);
+            doc.text(`${title} | Lv.${lv} | ${new Date().toLocaleDateString()}`, margin, 32);
+        };
+
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.top = '-9999px';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.width = '750px'; 
+        tempContainer.style.backgroundColor = '#202225';
+        document.body.appendChild(tempContainer);
+
+        drawHeader("Overview");
+        let currentY = 40;
+
+        const chartCanvas = document.getElementById('balanceChart');
+        if (chartCanvas) {
+            doc.setFontSize(14);
+            doc.setTextColor(255, 255, 255);
+            doc.text("1. Power Curve", margin, currentY);
+            currentY += 8;
+            const chartImg = chartCanvas.toDataURL("image/png");
+            doc.addImage(chartImg, 'PNG', margin, currentY, contentWidth, 90);
+            currentY += 100;
+        }
+
+        doc.addPage();
+        drawHeader("Matchup Matrix");
+        currentY = 40;
+        
+        let matrixHTML = `
+        <div style="padding:10px; background:#111; width:fit-content;">
+        <div style="display:grid; grid-template-columns: 80px repeat(${entities.length}, 1fr); gap:1px; border:1px solid #333;">
+            <div style="padding:8px; background:#2f3136; color:#ccc; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center;">A \\ D</div>
+            ${entities.map(e => `<div style="padding:5px; background:#2f3136; color:${e.color}; font-size:11px; font-weight:bold; text-align:center; overflow:hidden;">${e.name.substring(0,6)}</div>`).join('')}
+        `;
+
+        for(let i=0; i<entities.length; i++) {
+            matrixHTML += `<div style="padding:5px; background:#2f3136; color:${entities[i].color}; font-size:11px; font-weight:bold; display:flex; align-items:center;">${entities[i].name}</div>`;
+            for(let j=0; j<entities.length; j++) {
+                const rate = matrixData[i][j];
+                let bg = '#222';
+                let text = '-';
+                if (rate !== null) {
+                    text = Math.round(rate);
+                    if (rate > 60) bg = `rgba(45, 164, 78, ${rate/100})`; 
+                    else if (rate < 40) bg = `rgba(231, 76, 60, ${(100-rate)/100})`; 
+                    else bg = '#d29922'; 
+                }
+                matrixHTML += `<div style="background:${bg}; color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:bold; height:30px;">${text}</div>`;
+            }
+        }
+        matrixHTML += `</div></div>`;
+        tempContainer.innerHTML = matrixHTML;
+
+        const matrixCanvas = await html2canvas(tempContainer, { backgroundColor: '#202225', scale: 2 });
+        const mProps = doc.getImageProperties(matrixCanvas.toDataURL('image/png'));
+        const mHeight = (mProps.height * contentWidth) / mProps.width;
+        
+        if (currentY + mHeight > safeBottom) {
+            doc.addPage();
+            drawHeader("Matchup Matrix");
+            currentY = 40;
+        }
+        doc.addImage(matrixCanvas.toDataURL('image/png'), 'PNG', margin, currentY, contentWidth, mHeight);
+
+        doc.addPage();
+        drawHeader("Entity Specs");
+        currentY = 40;
+
+        for (let idx = 0; idx < entities.length; idx++) {
+             const ent = entities[idx];
+             const stats = Sim.getStatsAtLevel(ent, lv, items, rules);
+             let totalWins = 0, totalBattles = 0;
+             matrixData[idx].forEach(r => { if(r !== null) { totalWins += r; totalBattles++; } });
+             const avgWinRate = totalBattles > 0 ? (totalWins / totalBattles).toFixed(1) : 0;
+             const winColor = avgWinRate >= 50 ? '#2da44e' : '#e74c3c';
+
+             tempContainer.innerHTML = `
+             <div style="background:#2f3136; border-left: 5px solid ${ent.color}; padding:15px; border-radius:6px; color:#eee; font-family:sans-serif; width:700px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:8px;">
+                    <span style="font-size:20px; font-weight:bold;">${ent.name}</span>
+                    <span style="font-size:16px; color:${winColor}; font-weight:bold;">Win Rate: ${avgWinRate}%</span>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px;">
+                    ${Object.entries(stats).map(([k, v]) => `
+                        <div style="background:#202225; padding:6px; border-radius:4px; text-align:center;">
+                            <div style="font-size:10px; color:#888;">${k.toUpperCase()}</div>
+                            <div style="font-size:14px; font-weight:bold;">${Number.isInteger(v) ? v : v.toFixed(2)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+             </div>`;
+
+             const cardCanvas = await html2canvas(tempContainer, { backgroundColor: '#202225', scale: 2 });
+             const cImg = cardCanvas.toDataURL('image/png');
+             const cProps = doc.getImageProperties(cImg);
+             const cHeight = (cProps.height * contentWidth) / cProps.width;
+
+             if (currentY + cHeight > safeBottom) {
+                 doc.addPage();
+                 drawHeader("Entity Specs");
+                 currentY = 40;
+             }
+
+             doc.addImage(cImg, 'PNG', margin, currentY, contentWidth, cHeight);
+             currentY += cHeight + 5; 
+        }
+
+        document.body.removeChild(tempContainer);
+        
+        doc.save(`Kalivra_Report_${Date.now()}.pdf`);
+        ModalSystem.alert("PDF Generated!");
+
+    } catch (err) {
+        console.error(err);
+        ModalSystem.alert(err.message);
+    } finally {
+        if(btn) btn.innerHTML = originalText;
+    }
 }
 
+
+function exportToCSV() {
+    const entities = DM.getEntities(); const rules = DM.getRules(); const maxLv = parseInt(dom.maxLevel.value) || 20; const metric = dom.metric.value; const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
+    let csv = `Level,Metric (${metric.toUpperCase()}),Formula: ${formula.replace(/,/g, ';')}\n`; csv += "Level," + entities.map(e => e.name).join(',') + "\n";
+    for(let lv=1; lv <= maxLv; lv++){ 
+        const row = [lv]; entities.forEach(e => {
+            const stats = Sim.getStatsAtLevel(e, lv, DM.getItems(), rules); let val = 0; const dummyTarget = {}; if (rules.stats) rules.stats.forEach(s => dummyTarget[s] = 0);
+            try { if (metric === 'cp') val = Sim.calculateValue(rules.cpFormula, stats); else val = Sim.calculateValue(rules.dmgFormula, { a: stats, b: dummyTarget }); } catch (err) { val = 0; }
+            row.push(val.toFixed(2)); 
+        }); csv += row.join(',') + "\n";
+    }
+    ipcRenderer.send('export-csv', csv);
+}
 function exportToJSON() {
-    const exportData = {
-        meta: DM.getMeta(),
-        rules: DM.getRules(),
-        entities: DM.getEntities(),
-        items: DM.getItems(),
-        exportedAt: new Date().toISOString(),
-        note: "This is a shared balance configuration."
-    };
-    
+    const exportData = { meta: DM.getMeta(), rules: DM.getRules(), entities: DM.getEntities(), items: DM.getItems(), exportedAt: new Date().toISOString(), note: "This is a shared balance configuration." };
     ipcRenderer.send('export-json', exportData);
 }
 
-function debounce(func, timeout = 300) {
-    let timer;
-    return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); };
-}
+function debounce(func, timeout = 300) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); }; }
 const debouncedSimulation = debounce(() => { runSimulation(); }, 200);
 
 const undoStack = []; const redoStack = [];
-function executeCommand(command) { command.execute(); undoStack.push(command); redoStack.length = 0; }
+function executeCommand(command) { command.execute(); undoStack.push(command); redoStack.length = 0; setModified(true); }
 class PropertyChangeCommand { constructor(t,k,o,n,cb){this.t=t;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.t[this.k]=this.n;if(this.cb)this.cb();} undo(){this.t[this.k]=this.o;if(this.cb)this.cb();} }
 class StatChangeCommand { constructor(s,t,o,n,cb){this.s=s;this.t=t;this.o=o;this.n=n;this.cb=cb;} execute(){this.s[this.t]=this.n;if(this.cb)this.cb();} undo(){this.s[this.t]=this.o;if(this.cb)this.cb();} }
 class ItemModChangeCommand { constructor(m,k,o,n,cb){this.m=m;this.k=k;this.o=o;this.n=n;this.cb=cb;} execute(){this.m[this.k]=this.n;if(this.cb)this.cb();} undo(){this.m[this.k]=this.o;if(this.cb)this.cb();} }
@@ -488,15 +465,16 @@ class RemoveEntityCommand { constructor(i){this.i=i;this.rm=null;} execute(){thi
 class AddEntityCommand { constructor(d){this.d=d;} execute(){DM.addEntity(this.d);refreshAll();runSimulation();} undo(){DM.removeEntity(DM.getEntities().length-1);refreshAll();runSimulation();} }
 class RemoveItemCommand { constructor(i){this.i=i;this.rm=null;} execute(){this.rm=DM.getItems()[this.i];DM.getItems().splice(this.i,1);refreshAll();runSimulation();} undo(){DM.getItems().splice(this.i,0,this.rm);refreshAll();runSimulation();} }
 class AddItemCommand { constructor(d){this.d=d;} execute(){DM.addItem(this.d);refreshAll();runSimulation();} undo(){DM.getItems().pop();refreshAll();runSimulation();} }
-class LoadItemSetCommand {
-    constructor(newItems) { this.newItems = JSON.parse(JSON.stringify(newItems)); this.oldItems = JSON.parse(JSON.stringify(DM.getItems())); }
-    execute() { DM.setItems(this.newItems); refreshAll(); runSimulation(); }
-    undo() { DM.setItems(this.oldItems); refreshAll(); runSimulation(); }
-}
+class LoadItemSetCommand { constructor(newItems) { this.newItems = JSON.parse(JSON.stringify(newItems)); this.oldItems = JSON.parse(JSON.stringify(DM.getItems())); } execute() { DM.setItems(this.newItems); refreshAll(); runSimulation(); } undo() { DM.setItems(this.oldItems); refreshAll(); runSimulation(); } }
+class AddItemTraitCommand { constructor(item, trait, cb){ this.item=item; this.trait=trait; this.cb=cb; } execute(){ this.item.traits.push(this.trait); if(this.cb)this.cb(); } undo(){ this.item.traits.pop(); if(this.cb)this.cb(); } }
+class RemoveItemTraitCommand { constructor(item, idx, cb){ this.item=item; this.idx=idx; this.rm=null; this.cb=cb; } execute(){ this.rm=this.item.traits[this.idx]; this.item.traits.splice(this.idx,1); if(this.cb)this.cb(); } undo(){ this.item.traits.splice(this.idx,0,this.rm); if(this.cb)this.cb(); } }
+class ChangeItemTraitCommand { constructor(item, idx, oldVal, newVal, cb){ this.item=item; this.idx=idx; this.oldVal=oldVal; this.newVal=newVal; this.cb=cb; } execute(){ this.item.traits[this.idx] = JSON.parse(JSON.stringify(this.newVal)); if(this.cb)this.cb(); } undo(){ this.item.traits[this.idx] = JSON.parse(JSON.stringify(this.oldVal)); if(this.cb)this.cb(); } }
+class BulkStatChangeCommand { constructor(ids, stat, op, val) { this.ids = ids; this.stat = stat; this.op = op; this.val = val; this.history = []; } execute() { this.history = []; const entities = DM.getEntities(); entities.forEach(ent => { if (this.ids.includes(ent.id)) { if (!ent.stats[this.stat]) ent.stats[this.stat] = { b: 0, g: 0 }; const oldVal = ent.stats[this.stat].b; this.history.push({ id: ent.id, oldVal: oldVal }); let newVal = oldVal; if (this.op === 'set') newVal = this.val; else if (this.op === 'add') newVal += this.val; else if (this.op === 'mult') newVal *= this.val; ent.stats[this.stat].b = parseFloat(newVal.toFixed(2)); } }); refreshGrid(); refreshAll(); runSimulation(); } undo() { const entities = DM.getEntities(); this.history.forEach(rec => { const ent = entities.find(e => e.id === rec.id); if (ent && ent.stats[this.stat]) { ent.stats[this.stat].b = rec.oldVal; } }); refreshGrid(); refreshAll(); runSimulation(); } }
 
 document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (undoStack.length > 0) { const cmd = undoStack.pop(); cmd.undo(); redoStack.push(cmd); } }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { if (redoStack.length > 0) { const cmd = redoStack.pop(); cmd.execute(); undoStack.push(cmd); } }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (undoStack.length > 0) { const cmd = undoStack.pop(); cmd.undo(); redoStack.push(cmd); setModified(true); } }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { if (redoStack.length > 0) { const cmd = redoStack.pop(); cmd.execute(); undoStack.push(cmd); setModified(true); } }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); ipcRenderer.send('save-kal', { data: DM.getProjectData(), saveAs: false }); }
 });
 
 function refreshAll() {
@@ -508,7 +486,15 @@ function refreshAll() {
             onCommit: (key, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new PropertyChangeCommand(ent, key, oldVal, newVal, updateUI)); },
             onStatCommit: (statObj, type, oldVal, newVal) => { if(oldVal!==newVal) executeCommand(new StatChangeCommand(statObj, type, oldVal, newVal, updateUI)); },
             onLock: () => { ent.isLocked = !ent.isLocked; refreshAll(); },
-            onDelete: (i) => executeCommand(new RemoveEntityCommand(i))
+            onDelete: (i) => executeCommand(new RemoveEntityCommand(i)),
+            onSolver: (statName) => {
+                solverContext = { entId: ent.id, stat: statName };
+                document.getElementById('solverTargetName').innerText = ent.name;
+                document.getElementById('solverStatName').innerText = statName.toUpperCase();
+                document.getElementById('solverLevel').value = document.getElementById('maxLevel').value;
+                solverModal.style.display = 'flex';
+                document.getElementById('solverValue').focus();
+            }
         });
     });
     DM.getItems().forEach((item, idx) => {
@@ -520,165 +506,217 @@ function refreshAll() {
             onDelete: (i) => executeCommand(new RemoveItemCommand(i)),
             onModAdd: () => { executeCommand(new AddItemModCommand(item, { stat: DM.getRules().stats[0], op:'add', val:0, when: "" }, updateUI)); },
             onModDelete: (modIdx) => { executeCommand(new RemoveItemModCommand(item, modIdx, updateUI)); },
-            onModCommit: (mod, key, oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI)); }
+            onModCommit: (mod, key, oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI)); },
+            onTargetCommit: (oldTargets, newTargets) => { executeCommand(new PropertyChangeCommand(item, 'targets', oldTargets, newTargets, updateUI)); },
+            onTraitAdd: (newTrait) => { executeCommand(new AddItemTraitCommand(item, newTrait, updateUI)); },
+            onTraitDelete: (traitIdx) => { executeCommand(new RemoveItemTraitCommand(item, traitIdx, updateUI)); },
+            onTraitCommit: (traitIdx, oldTrait, newTrait) => { executeCommand(new ChangeItemTraitCommand(item, traitIdx, oldTrait, newTrait, updateUI)); }
         });
     });
 }
 
-function runSimulation() {
-    const max = parseInt(dom.maxLevel.value) || 20;
-    const metric = dom.metric.value;
-    const rules = DM.getRules();
-    const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula;
-    const labels = Array.from({length: max}, (_, i) => `Lv.${i+1}`);
-    const datasets = []; 
-    const rawData = {}; 
-    const dummyTarget = {};
-    if (rules.stats) rules.stats.forEach(s => dummyTarget[s] = 0);
+document.querySelector('.close-solver').addEventListener('click', () => solverModal.style.display = 'none');
 
-    let currentTotal = 0;
-    let snapshotTotal = 0;
-    let hasSnapshot = comparisonSnapshotIndex >= 0;
+document.getElementById('runSolverBtn').addEventListener('click', () => {
+    if (!solverContext) return;
+    
+    const targetLv = parseInt(document.getElementById('solverLevel').value);
+    const targetVal = parseFloat(document.getElementById('solverValue').value);
+    const metric = document.getElementById('solverMetric').value;
+    
+    if (!targetVal || isNaN(targetVal)) return ModalSystem.alert("Please enter a valid target value.");
 
-    DM.getEntities().forEach(ent => {
-        const data = [];
-        for(let lv=1; lv<=max; lv++) {
-            const stats = Sim.getStatsAtLevel(ent, lv, DM.getItems(), rules);
-            let val = 0;
-            try {
-                if (metric === 'cp') val = Sim.calculateValue(formula, stats);
-                else val = Sim.calculateValue(formula, { a: stats, b: dummyTarget });
-            } catch (err) { val = 0; }
-            data.push(val);
-            currentTotal += val;
-        }
-        datasets.push({ label: ent.name, data, borderColor: ent.color, backgroundColor: ent.color+'20', borderWidth:2, tension:0.3 });
-        rawData[ent.id] = { name: ent.name, data, color: ent.color };
+    const entity = DM.getEntities().find(e => e.id === solverContext.entId);
+    if (!entity) return;
+
+    const resultGrowth = Solver.findGrowthValue(
+        entity, 
+        DM.getItems(), 
+        DM.getRules(), 
+        targetLv, 
+        targetVal, 
+        solverContext.stat, 
+        metric
+    );
+
+    if (resultGrowth !== null) {
+        const oldVal = entity.stats[solverContext.stat].g;
+        
+        executeCommand(new StatChangeCommand(
+            entity.stats[solverContext.stat], 
+            'g', 
+            oldVal, 
+            resultGrowth, 
+            () => { refreshAll(); runSimulation(); }
+        ));
+
+        solverModal.style.display = 'none';
+        
+        const btn = document.getElementById('runSolverBtn');
+        ModalSystem.alert(`Applied Growth: ${resultGrowth}`);
+    } else {
+        ModalSystem.alert("Could not calculate a valid growth value.\nCheck your formulas.");
+    }
+});
+
+function analyzeBalanceIssues(rawData, maxLevel, rules) {
+    const issues = []; const entities = Object.values(rawData);
+    if (entities.length < 2) return '<div class="log-item placeholder">Need at least 2 entities to analyze balance.</div>';
+    const levelStats = [];
+    for (let i = 0; i < maxLevel; i++) { const values = entities.map(e => e.data[i]); const sum = values.reduce((a, b) => a + b, 0); const avg = sum / values.length; levelStats.push({ avg }); }
+    entities.forEach(ent => {
+        let opCount = 0; let upCount = 0;
+        ent.data.forEach((val, lvIdx) => { const avg = levelStats[lvIdx].avg; if (val > avg * 1.2) opCount++; if (val < avg * 0.8) upCount++; });
+        const opRatio = (opCount / maxLevel) * 100; const upRatio = (upCount / maxLevel) * 100;
+        if (opRatio > 50) issues.push({ type: 'CRITICAL', percent: opRatio, msg: `<b style="color:${ent.color}">${ent.name}</b> is OP (Overpowered) in ${opRatio.toFixed(0)}% of levels.` });
+        else if (opRatio > 20) issues.push({ type: 'WARNING', percent: opRatio, msg: `<b style="color:${ent.color}">${ent.name}</b> is strong in ${opRatio.toFixed(0)}% of levels.` });
+        if (upRatio > 50) issues.push({ type: 'WEAK', percent: upRatio, msg: `<b style="color:${ent.color}">${ent.name}</b> is too weak in ${upRatio.toFixed(0)}% of levels.` });
     });
+    const phases = [{ name: 'Early', range: [0, Math.floor(maxLevel * 0.33)] }, { name: 'Mid', range: [Math.floor(maxLevel * 0.33), Math.floor(maxLevel * 0.66)] }, { name: 'Late', range: [Math.floor(maxLevel * 0.66), maxLevel] }];
+    phases.forEach(phase => {
+        let bestEnt = null; let maxAvgVal = -1;
+        entities.forEach(ent => { const slice = ent.data.slice(phase.range[0], phase.range[1]); if (slice.length === 0) return; const phaseAvg = slice.reduce((a,b)=>a+b,0) / slice.length; if (phaseAvg > maxAvgVal) { maxAvgVal = phaseAvg; bestEnt = ent; } });
+        if (bestEnt) issues.push({ type: 'INFO', percent: 0, msg: `[${phase.name} Game] <b style="color:${bestEnt.color}">${bestEnt.name}</b> dominates this phase.` });
+    });
+    const priority = { 'CRITICAL': 4, 'WARNING': 3, 'WEAK': 2, 'INFO': 1 };
+    issues.sort((a, b) => { const pA = priority[a.type] || 0; const pB = priority[b.type] || 0; if (pA !== pB) return pB - pA; return b.percent - a.percent; });
+    let html = '';
+    if (issues.length > 0) {
+        html += `<div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #444;">`;
+        issues.forEach(issue => {
+            let badgeColor = '#888'; if (issue.type === 'CRITICAL') badgeColor = '#ed4245'; else if (issue.type === 'WARNING') badgeColor = '#e67e22'; else if (issue.type === 'WEAK') badgeColor = '#95a5a6'; else if (issue.type === 'INFO') badgeColor = '#5fabff';
+            html += `<div class="log-item" style="gap:8px;"><span style="background:${badgeColor}; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.75em; font-weight:bold; min-width:60px; text-align:center;">${issue.type}</span><span>${issue.msg}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    const crossovers = Sim.analyzeCrossovers(rawData, maxLevel);
+    if (crossovers.length > 0) { html += `<div style="font-size:0.85em; color:#aaa; margin-bottom:5px;">⚡ Power Spikes (Crossovers)</div>`; crossovers.forEach(c => { html += `<div class="log-item"><span class="log-level">Lv.${c.lv-1}→${c.lv}</span>: <b style="color:${c.wColor}">${c.winnerName}</b> overtakes <b style="color:${c.lColor}">${c.loserName}</b></div>`; }); }
+    if (html === '') return '<div class="log-item placeholder">Balance looks stable.</div>';
+    return html;
+}
 
+function runSimulation() {
+    const max = parseInt(dom.maxLevel.value) || 20; const metric = dom.metric.value; const rules = DM.getRules(); const formula = metric === 'cp' ? rules.cpFormula : rules.dmgFormula; const labels = Array.from({length: max}, (_, i) => `Lv.${i+1}`); const datasets = []; const rawData = {}; const dummyTarget = {}; if (rules.stats) rules.stats.forEach(s => dummyTarget[s] = 0);
+    let hasSnapshot = comparisonSnapshotIndex >= 0;
+    DM.getEntities().forEach(ent => {
+        const data = []; for(let lv=1; lv<=max; lv++) { const stats = Sim.getStatsAtLevel(ent, lv, DM.getItems(), rules); let val = 0; try { if (metric === 'cp') val = Sim.calculateValue(formula, stats); else val = Sim.calculateValue(formula, { a: stats, b: dummyTarget }); } catch (err) { val = 0; } data.push(val); }
+        datasets.push({ label: ent.name, data, borderColor: ent.color, backgroundColor: ent.color+'20', borderWidth:2, tension:0.3 }); rawData[ent.id] = { name: ent.name, data, color: ent.color };
+    });
     if (hasSnapshot) {
         const snapshot = DM.getSnapshots()[comparisonSnapshotIndex];
         if (snapshot) {
-            const snapData = snapshot.data;
-            const snapRules = snapData.rules || rules;
-            const snapFormula = metric === 'cp' ? snapRules.cpFormula : snapRules.dmgFormula;
-            const snapItems = snapData.items || [];
+            const snapData = snapshot.data; const snapRules = snapData.rules || rules; const snapFormula = metric === 'cp' ? snapRules.cpFormula : snapRules.dmgFormula; const snapItems = snapData.items || [];
             (snapData.entities || []).forEach(ent => {
-                const data = [];
-                for(let lv=1; lv<=max; lv++) {
-                    const stats = Sim.getStatsAtLevel(ent, lv, snapItems, snapRules);
-                    let val = 0;
-                    try {
-                        if (metric === 'cp') val = Sim.calculateValue(snapFormula, stats);
-                        else val = Sim.calculateValue(snapFormula, { a: stats, b: dummyTarget });
-                    } catch (err) { val = 0; }
-                    data.push(val);
-                    snapshotTotal += val;
-                }
+                const data = []; for(let lv=1; lv<=max; lv++) { const stats = Sim.getStatsAtLevel(ent, lv, snapItems, snapRules); let val = 0; try { if (metric === 'cp') val = Sim.calculateValue(snapFormula, stats); else val = Sim.calculateValue(snapFormula, { a: stats, b: dummyTarget }); } catch (err) { val = 0; } data.push(val); }
                 datasets.push({ label: `[Old] ${ent.name}`, data, borderColor: ent.color, backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, borderDash: [5, 5], pointStyle: 'crossRot' });
             });
         }
     }
-
     if (Charts && Charts.renderMainChart) Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
-    
-    const crossovers = Sim.analyzeCrossovers(rawData, max);
     let logHTML = '';
     
+    // [FIXED] Snapshot Comparison Logic Restored
     if (hasSnapshot) {
         const snapshot = DM.getSnapshots()[comparisonSnapshotIndex];
         const snapName = snapshot ? snapshot.name : "Snapshot";
-        
-        logHTML += `<div style="margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
-            <div style="font-weight:bold; color:#ccc; margin-bottom:5px;">⚡ VS [${snapName}] Comparison</div>`;
-
+        logHTML += `<div style="margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;"><div style="font-weight:bold; color:#ccc; margin-bottom:5px;">⚡ VS [${snapName}] Comparison</div>`;
         DM.getEntities().forEach(ent => {
             const currVal = rawData[ent.id] ? rawData[ent.id].data.reduce((a,b)=>a+b, 0) : 0;
-            
-            let snapVal = 0;
-            let foundInSnap = false;
-            
+            let snapVal = 0; let foundInSnap = false;
             if (snapshot && snapshot.data && snapshot.data.entities) {
                 const snapEnt = snapshot.data.entities.find(e => e.name === ent.name);
                 if (snapEnt) {
                     foundInSnap = true;
-                    const snapItems = snapshot.data.items || [];
-                    const snapRules = snapshot.data.rules || rules;
-                    const snapFormula = metric === 'cp' ? snapRules.cpFormula : snapRules.dmgFormula;
-                    
+                    const snapItems = snapshot.data.items || []; const snapRules = snapshot.data.rules || rules; const snapFormula = metric === 'cp' ? snapRules.cpFormula : snapRules.dmgFormula;
                     for(let lv=1; lv<=max; lv++) {
-                        try {
-                            const sStats = Sim.getStatsAtLevel(snapEnt, lv, snapItems, snapRules);
-                            let val = 0;
-                            if (metric === 'cp') val = Sim.calculateValue(snapFormula, sStats);
-                            else val = Sim.calculateValue(snapFormula, { a: sStats, b: dummyTarget });
-                            snapVal += val;
-                        } catch(e) { snapVal += 0; }
+                        try { const sStats = Sim.getStatsAtLevel(snapEnt, lv, snapItems, snapRules); let val = 0; if (metric === 'cp') val = Sim.calculateValue(snapFormula, sStats); else val = Sim.calculateValue(snapFormula, { a: sStats, b: dummyTarget }); snapVal += val; } catch(e) { snapVal += 0; }
                     }
                 }
             }
-
             if (foundInSnap) {
-                const diff = currVal - snapVal;
-                const pcent = snapVal !== 0 ? ((diff / snapVal) * 100).toFixed(1) : 0;
-                
-                const isBuff = diff >= 0;
-                const color = isBuff ? '#4ecca3' : '#e74c3c';
-                const sign = isBuff ? '+' : '';
-                const icon = isBuff ? '▲' : '▼';
-
-                logHTML += `
-                <div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#eee;">${ent.name}</span>
-                    <div style="text-align:right;">
-                        <div style="font-size:0.8em; color:#888;">Avg ${metric.toUpperCase()}</div>
-                        <span style="color:${color}; font-weight:bold;">
-                            ${Math.round(snapVal/max)} <span style="font-size:0.8em; color:#666;">→</span> ${Math.round(currVal/max)}
-                        </span>
-                        <span style="margin-left:8px; color:${color}; background:${color}20; padding:2px 6px; border-radius:4px; font-size:0.85em;">
-                            ${icon} ${sign}${pcent}%
-                        </span>
-                    </div>
-                </div>`;
+                const diff = currVal - snapVal; const pcent = snapVal !== 0 ? ((diff / snapVal) * 100).toFixed(1) : 0;
+                const isBuff = diff >= 0; const color = isBuff ? '#4ecca3' : '#e74c3c'; const sign = isBuff ? '+' : ''; const icon = isBuff ? '▲' : '▼';
+                logHTML += `<div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; display:flex; justify-content:space-between; align-items:center;"><span style="font-weight:bold; color:#eee;">${ent.name}</span><div style="text-align:right;"><div style="font-size:0.8em; color:#888;">Avg ${metric.toUpperCase()}</div><span style="color:${color}; font-weight:bold;">${Math.round(snapVal/max)} <span style="font-size:0.8em; color:#666;">→</span> ${Math.round(currVal/max)}</span><span style="margin-left:8px; color:${color}; background:${color}20; padding:2px 6px; border-radius:4px; font-size:0.85em;">${icon} ${sign}${pcent}%</span></div></div>`;
             } else {
-                logHTML += `
-                <div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; color:#888;">
-                    <span style="font-weight:bold; color:#eee;">${ent.name}</span>
-                    <span style="float:right; font-size:0.8em; color:#5fabff;">(New Entity)</span>
-                </div>`;
+                logHTML += `<div style="background:#252526; border-left: 3px solid ${ent.color}; padding:8px; margin-top:5px; border-radius:4px; font-size:0.9em; color:#888;"><span style="font-weight:bold; color:#eee;">${ent.name}</span><span style="float:right; font-size:0.8em; color:#5fabff;">(New Entity)</span></div>`;
             }
         });
-
         logHTML += `</div>`;
     }
 
-    if (crossovers.length === 0 && !hasSnapshot) logHTML += '<div class="log-item placeholder">No crossover points detected.</div>';
-    crossovers.forEach(c => { 
-        logHTML += `<div class="log-item"><span class="log-level">Lv.${c.lv-1}->${c.lv}</span>: <b style="color:${c.wColor}">${c.winnerName}</b> overtakes <b style="color:${c.lColor}">${c.loserName}</b></div>`; 
-    });
+    logHTML += analyzeBalanceIssues(rawData, max, rules);
     dom.analysisLog.innerHTML = logHTML;
 }
 
-const configModal = document.getElementById('configModal');
-document.getElementById('configBtn').addEventListener('click', () => {
-    ModalSystem.init(); 
-
-    const rules = DM.getRules(); 
-    const meta = DM.getMeta();
-    
-    document.getElementById('metaProjectName').value = meta.projectName || '';
-    document.getElementById('metaAuthor').value = meta.author || '';
-    document.getElementById('metaDesc').value = meta.description || '';
-    document.getElementById('dmgFormula').value = rules.dmgFormula;
-    document.getElementById('hitFormula').value = rules.hitFormula || "(a.acc - b.eva)";
-    document.getElementById('cpFormula').value = rules.cpFormula;
-    document.getElementById('statDefinitions').value = rules.stats.join(', ');
-
-    injectPresetButton();
-    
-    configModal.style.display = 'flex';
+function runDetailAnalysis(idA, idB, lv) {
+    const entA = DM.getEntities().find(e => e.id === idA); const entB = DM.getEntities().find(e => e.id === idB); if (!entA || !entB) return ModalSystem.alert("Entities not found.");
+    let statsA, statsB, battleEntA, battleEntB;
+    try {
+        statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id)); battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
+        statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules()); const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id)); battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
+    } catch (e) { return ModalSystem.alert(e.message); } 
+    detailModal.style.display = 'flex'; detailModal.style.zIndex = "9999"; 
+    const titleEl = document.getElementById('detailTitle') || document.querySelector('#detailModal h2'); if (titleEl) titleEl.innerText = `${entA.name} vs ${entB.name}`;
+    document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
+    setTimeout(() => {
+        const startTime = performance.now(); const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules()); const endTime = performance.now();
+        Charts.renderDetailCharts(document.getElementById('detailTurnChart').getContext('2d'), document.getElementById('detailHpChart').getContext('2d'), result);
+        const fwr = result.firstTurnWinRate.toFixed(1); const fwrColor = result.firstTurnWinRate > 60 ? '#e74c3c' : (result.firstTurnWinRate < 40 ? '#e74c3c' : '#2da44e');
+        document.getElementById('detailStats').innerHTML = `<style>.stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; } .stat-label { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; } .stat-value { font-size: 1.2em; font-weight: bold; color: #ddd; }</style><div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;"><div class="stat-grid-item"><span class="stat-label">Total Win Rate</span><span class="stat-value" style="color:${result.winRate>50?'#2da44e':'#e74c3c'}">${result.winRate.toFixed(2)}%</span></div><div class="stat-grid-item" style="border-color:${fwrColor}40"><span class="stat-label">Win% (When 1st)</span><span class="stat-value" style="color:${fwrColor}">${fwr}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg Turns</span><span class="stat-value" style="color:#d29922">${result.avgTurns.toFixed(2)}</span></div><div class="stat-grid-item"><span class="stat-label">Sim Time</span><span class="stat-value" style="color:#777">${(endTime-startTime).toFixed(0)}ms</span></div><div class="stat-grid-item"><span class="stat-label">Realized Crit %</span><span class="stat-value" style="color:#5fabff">${result.realizedCritRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Realized Dodge %</span><span class="stat-value" style="color:#b9bbbe">${result.realizedDodgeRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg DPT</span><span class="stat-value" style="color:#e74c3c">${Math.round(result.avgDpt)}</span></div><div class="stat-grid-item"><span class="stat-label">Avg Overkill</span><span class="stat-value" style="color:#e67e22">${Math.round(result.avgOverkill)}</span></div></div>`;
+    }, 50);
+}
+function renderBattleLog(allResults, heroName) {
+    if (!allResults || allResults.length === 0) return; dom.battleLog.innerHTML = '';
+    allResults.forEach((item, index) => {
+        const { opponent, result } = item; const allLogs = result.allLogs || []; const winRate = result.winRate.toFixed(1); const avgTurns = result.avgTurns.toFixed(1); const isWin = result.winRate >= 50; const tagClass = isWin ? 'tag-win' : 'tag-lose';
+        const group = document.createElement('div'); group.className = 'log-group'; const header = document.createElement('div'); header.className = 'log-header';
+        header.innerHTML = `<span>VS ${opponent.name}</span><div style="display:flex; gap:10px; align-items:center;"><span style="font-size:0.8em; color:#ccc;">Avg Turns: <span style="color:#fee75c;">${avgTurns}</span></span><span class="win-tag ${tagClass}">Win ${winRate}%</span></div>`;
+        const content = document.createElement('div'); content.className = 'log-content'; const navContainer = document.createElement('div'); navContainer.style.display = 'flex'; navContainer.style.justifyContent = 'space-between'; navContainer.style.alignItems = 'center'; navContainer.style.marginBottom = '10px'; navContainer.style.paddingBottom = '10px'; navContainer.style.borderBottom = '1px solid #3e3e42'; const logTextBox = document.createElement('div'); logTextBox.className = 'log-text-box';
+        let currentLogIdx = 0; 
+        const updateLogDisplay = () => {
+            const logs = allLogs[currentLogIdx]; navContainer.innerHTML = `<button class="nav-btn prev-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">◀</button><span style="font-size:0.9em; font-weight:bold; color:#5fabff;">Battle ${currentLogIdx + 1} / ${allLogs.length}</span><button class="nav-btn next-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">▶</button>`;
+            navContainer.querySelector('.prev-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx - 1 + allLogs.length) % allLogs.length; updateLogDisplay(); }; navContainer.querySelector('.next-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx + 1) % allLogs.length; updateLogDisplay(); };
+            if (logs && logs.length > 0) {
+                let html = ''; let currentTurn = 0;
+                logs.forEach(log => {
+                    if (log.turn !== currentTurn) { currentTurn = log.turn; html += `<div class="log-turn-divider">Turn ${currentTurn}</div>`; }
+                    const isHero = (log.actor === heroName); const actorClass = isHero ? 'log-actor-hero' : 'log-actor-enemy'; const valClass = log.action === 'attack' ? 'log-val-dmg' : 'log-val-heal';
+                    let msg = ''; if (log.action === 'attack') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#aaa;">attacked</span> <span class="log-target">${log.target}</span> → <span class="${valClass}">-${log.val} HP</span>`; else if (log.action === 'die') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#888;">${log.msg}</span>`; else if (log.action === 'miss') msg = `<span class="${actorClass}">${log.actor}</span>: <span style="color:#aaa;">Missed!</span>`; else msg = `<span class="${actorClass}">${log.actor}</span>: ${log.msg}`;
+                    html += `<div class="log-item-detail">${msg}</div>`;
+                });
+                html += `<div class="log-footer">Simulation End</div>`; logTextBox.innerHTML = html;
+            } else { logTextBox.innerHTML = '<div style="color:#666; text-align:center;">No log data available</div>'; }
+        };
+        if (allLogs.length > 0) { content.appendChild(navContainer); content.appendChild(logTextBox); updateLogDisplay(); } else { content.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">Logs disabled for huge counts</div>'; }
+        header.addEventListener('click', () => { content.classList.toggle('open'); }); group.appendChild(header); group.appendChild(content); dom.battleLog.appendChild(group); if (index === 0) content.classList.add('open');
+    });
+}
+function renderBattleStats(attacker, statsA, allResults) {
+    const container = dom.battleStatList;
+    const createCard = (name, color, stats) => { let rows = ''; for (const [key, val] of Object.entries(stats)) { if (typeof val === 'number') { const displayVal = Number.isInteger(val) ? val : val.toFixed(2); rows += `<div class="stat-row"><span class="stat-name">${key.toUpperCase()}</span><span class="stat-val">${displayVal}</span></div>`; } } return `<div class="stat-card" style="border-left-color: ${color}"><div class="stat-card-header">${name}</div><div class="stat-grid">${rows}</div></div>`; };
+    let html = createCard(attacker.name, attacker.color, statsA); allResults.forEach(item => { const { opponent, statsB } = item; html += createCard(opponent.name, opponent.color, statsB); }); container.innerHTML = html;
+}
+Utils.initResizer(document.getElementById('resizerLeft'), document.getElementById('leftSidebar'), 'left', Charts.resizeCharts);
+Utils.initResizer(document.getElementById('resizerRight'), document.getElementById('rightSidebar'), 'right', Charts.resizeCharts);
+Utils.initResizer(document.getElementById('resizerVertical'), document.getElementById('analysisPanel'), 'vertical', Charts.resizeCharts);
+document.body.addEventListener('focusout', (e) => { 
+    const target = e.target; const formulaIds = ['dmgFormula', 'cpFormula', 'hitFormula'];
+    if (formulaIds.includes(target.id)) { const res = checkFormula(target.value); if (!res.valid) flashErrorOnLabel(target, res.error); }
+    else if (target.tagName === 'INPUT' && target.type === 'number') { const val = target.value; if (!val) return; if (isNaN(Number(val))) flashErrorOnLabel(target, "NaN"); } 
 });
 
+function initProject() {
+    ModalSystem.init(); injectComparisonUI(); setupExportDropdown();
+    const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
+    const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", acc: "Accuracy (명중)", eva: "Evasion (회피)", cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" };
+    const defaultValues = { hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } };
+    if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, defaultValues: defaultValues, dmgFormula: "atk * (100 / (100 + def))", hitFormula: "(a.acc - b.eva)", cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" }); }
+    updateComparisonDropdown(); refreshAll(); runSimulation();
+    if(dom.gridCont) { initBulkOptions(); refreshGrid(); }
+}
+
+const configModal = document.getElementById('configModal');
+document.getElementById('configBtn').addEventListener('click', () => { ModalSystem.init(); const rules = DM.getRules(); const meta = DM.getMeta(); document.getElementById('metaProjectName').value = meta.projectName || ''; document.getElementById('metaAuthor').value = meta.author || ''; document.getElementById('metaDesc').value = meta.description || ''; document.getElementById('dmgFormula').value = rules.dmgFormula; document.getElementById('hitFormula').value = rules.hitFormula || "(a.acc - b.eva)"; document.getElementById('cpFormula').value = rules.cpFormula; document.getElementById('statDefinitions').value = rules.stats.join(', '); injectPresetButton(); configModal.style.display = 'flex'; });
 document.querySelector('.close-bulk').addEventListener('click', () => dom.bulkModal.style.display = 'none');
 document.querySelector('.close-modal').addEventListener('click', () => configModal.style.display = 'none');
 document.querySelector('.close-snapshot').addEventListener('click', () => snapshotModal.style.display = 'none');
@@ -686,264 +724,169 @@ document.querySelector('.close-battle').addEventListener('click', () => battleMo
 document.querySelector('.close-detail').addEventListener('click', () => detailModal.style.display = 'none');
 document.querySelector('.close-league').addEventListener('click', () => leagueModal.style.display = 'none');
 if(closeItemSet) closeItemSet.addEventListener('click', () => itemSetModal.style.display = 'none');
-
 document.getElementById('applyConfigBtn').addEventListener('click', () => {
-    const dmgInput = document.getElementById('dmgFormula');
-    const cpInput = document.getElementById('cpFormula');
-    const hitInput = document.getElementById('hitFormula');
-    const statInput = document.getElementById('statDefinitions');
-    
+    const dmgInput = document.getElementById('dmgFormula'); const cpInput = document.getElementById('cpFormula'); const hitInput = document.getElementById('hitFormula'); const statInput = document.getElementById('statDefinitions');
     const newStats = statInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
     if (newStats.length === 0) { flashErrorOnLabel(statInput, "Min 1 stat req"); return; }
-    const dmgRes = checkFormula(dmgInput.value);
-    if (!dmgRes.valid) { flashErrorOnLabel(dmgInput, dmgRes.error); return; }
-    const cpRes = checkFormula(cpInput.value);
-    if (!cpRes.valid) { flashErrorOnLabel(cpInput, cpRes.error); return; }
-    const hitRes = checkFormula(hitInput.value);
-    if (!hitRes.valid) { flashErrorOnLabel(hitInput, hitRes.error); return; }
-
-    const rawDesc = document.getElementById('statDescInput').value; 
-    const descriptions = {};
-    rawDesc.split('\n').forEach(line => { const parts = line.split(':'); if (parts.length >= 2) descriptions[parts[0].trim()] = parts.slice(1).join(':').trim(); });
-    
+    if (!checkFormula(dmgInput.value).valid) { flashErrorOnLabel(dmgInput, "Err"); return; } if (!checkFormula(cpInput.value).valid) { flashErrorOnLabel(cpInput, "Err"); return; } if (!checkFormula(hitInput.value).valid) { flashErrorOnLabel(hitInput, "Err"); return; }
+    const rawDesc = document.getElementById('statDescInput').value; const descriptions = {}; rawDesc.split('\n').forEach(line => { const parts = line.split(':'); if (parts.length >= 2) descriptions[parts[0].trim()] = parts.slice(1).join(':').trim(); });
     DM.setMeta({ projectName: document.getElementById('metaProjectName').value, author: document.getElementById('metaAuthor').value, description: document.getElementById('metaDesc').value });
     DM.setRules({ stats: newStats, descriptions: descriptions, dmgFormula: dmgInput.value, hitFormula: hitInput.value, cpFormula: cpInput.value });
     DM.getEntities().forEach(ent => { newStats.forEach(stat => { if (!ent.stats[stat]) ent.stats[stat] = { b: 0, g: 0 }; }); });
-    configModal.style.display = 'none'; 
-    refreshAll(); 
-    runSimulation();
+    configModal.style.display = 'none'; refreshAll(); runSimulation();
 });
-
-const snapshotModal = document.getElementById('snapshotModal');
-const snapshotListCont = document.getElementById('snapshotListContainer');
+const snapshotModal = document.getElementById('snapshotModal'); const snapshotListCont = document.getElementById('snapshotListContainer');
 function renderSnapshots() {
-    const snapshots = DM.getSnapshots();
-    snapshotListCont.innerHTML = '';
+    const snapshots = DM.getSnapshots(); snapshotListCont.innerHTML = '';
     if (snapshots.length === 0) { snapshotListCont.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No snapshots saved.</div>'; return; }
     snapshots.forEach((snap, idx) => {
-        const item = document.createElement('div');
-        item.className = 'snapshot-item';
-        item.innerHTML = `<div class="snapshot-info"><span class="snapshot-name">${snap.name}</span><span class="snapshot-date">${new Date(snap.date).toLocaleString()}</span></div><div class="snapshot-actions"><button class="load-btn" data-idx="${idx}">Load</button><button class="del-btn" data-idx="${idx}">✕</button></div>`;
-        item.querySelector('.load-btn').addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            ModalSystem.confirm(`Load "${snap.name}"?`, () => {
-                DM.loadSnapshot(idx); undoStack.length=0; redoStack.length=0; 
-                comparisonSnapshotIndex = -1; 
-                refreshAll(); runSimulation(); snapshotModal.style.display='none'; 
-            });
-        });
-        item.querySelector('.del-btn').addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            ModalSystem.confirm('Delete this snapshot?', () => {
-                DM.deleteSnapshot(idx); 
-                if(comparisonSnapshotIndex === idx) comparisonSnapshotIndex = -1;
-                renderSnapshots(); updateComparisonDropdown();
-            });
-        });
+        const item = document.createElement('div'); item.className = 'snapshot-item'; item.innerHTML = `<div class="snapshot-info"><span class="snapshot-name">${snap.name}</span><span class="snapshot-date">${new Date(snap.date).toLocaleString()}</span></div><div class="snapshot-actions"><button class="load-btn" data-idx="${idx}">Load</button><button class="del-btn" data-idx="${idx}">✕</button></div>`;
+        item.querySelector('.load-btn').addEventListener('click', (e) => { e.stopPropagation(); ModalSystem.confirm(`Load "${snap.name}"?`, () => { DM.loadSnapshot(idx); undoStack.length=0; redoStack.length=0; comparisonSnapshotIndex = -1; refreshAll(); runSimulation(); snapshotModal.style.display='none'; }); });
+        item.querySelector('.del-btn').addEventListener('click', (e) => { e.stopPropagation(); ModalSystem.confirm('Delete this snapshot?', () => { DM.deleteSnapshot(idx); if(comparisonSnapshotIndex === idx) comparisonSnapshotIndex = -1; renderSnapshots(); updateComparisonDropdown(); }); });
         snapshotListCont.appendChild(item);
     });
 }
 document.getElementById('snapshotBtn').addEventListener('click', () => { renderSnapshots(); snapshotModal.style.display = 'flex'; });
-document.getElementById('createSnapshotBtn').addEventListener('click', () => { 
-    const name = document.getElementById('newSnapshotName').value.trim(); 
-    DM.createSnapshot(name); 
-    document.getElementById('newSnapshotName').value=''; 
-    renderSnapshots(); updateComparisonDropdown();
-});
-
+document.getElementById('createSnapshotBtn').addEventListener('click', () => { const name = document.getElementById('newSnapshotName').value.trim(); DM.createSnapshot(name); document.getElementById('newSnapshotName').value=''; renderSnapshots(); updateComparisonDropdown(); });
 function renderItemSets() {
-    const sets = DM.getItemSets();
-    itemSetList.innerHTML = '';
+    const sets = DM.getItemSets(); itemSetList.innerHTML = '';
     if (sets.length === 0) { itemSetList.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No saved sets.</div>'; return; }
     sets.forEach((set, idx) => {
-        const el = document.createElement('div');
-        el.className = 'snapshot-item'; 
-        el.innerHTML = `<div class="snapshot-info"><span class="snapshot-name">${set.name}</span><span style="font-size:0.8em; color:#777;">${set.items.length} items</span></div><div class="snapshot-actions"><button class="load-btn">Load</button><button class="del-btn">✕</button></div>`;
-        el.querySelector('.load-btn').addEventListener('click', () => { 
-            ModalSystem.confirm(`Replace current items with "${set.name}"?`, () => {
-                executeCommand(new LoadItemSetCommand(set.items)); itemSetModal.style.display = 'none'; 
-            });
-        });
-        el.querySelector('.del-btn').addEventListener('click', () => { ModalSystem.confirm('Delete this set?', () => { DM.deleteItemSet(idx); renderItemSets(); }); });
-        itemSetList.appendChild(el);
+        const el = document.createElement('div'); el.className = 'snapshot-item'; el.innerHTML = `<div class="snapshot-info"><span class="snapshot-name">${set.name}</span><span style="font-size:0.8em; color:#777;">${set.items.length} items</span></div><div class="snapshot-actions"><button class="load-btn">Load</button><button class="del-btn">✕</button></div>`;
+        el.querySelector('.load-btn').addEventListener('click', () => { ModalSystem.confirm(`Replace current items with "${set.name}"?`, () => { executeCommand(new LoadItemSetCommand(set.items)); itemSetModal.style.display = 'none'; }); });
+        el.querySelector('.del-btn').addEventListener('click', () => { ModalSystem.confirm('Delete this set?', () => { DM.deleteItemSet(idx); renderItemSets(); }); }); itemSetList.appendChild(el);
     });
 }
 if(btnItemSet) btnItemSet.addEventListener('click', () => { renderItemSets(); itemSetModal.style.display = 'flex'; });
-if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => { 
-    const name = document.getElementById('newItemSetName').value.trim(); 
-    if(!name) return ModalSystem.alert("Please enter a name."); 
-    DM.addItemSet(name); document.getElementById('newItemSetName').value = ''; 
-    renderItemSets(); ipcRenderer.send('save-kal', DM.getProjectData()); 
-});
-
-document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', DM.getProjectData()));
+if(saveItemSetBtn) saveItemSetBtn.addEventListener('click', () => { const name = document.getElementById('newItemSetName').value.trim(); if(!name) return ModalSystem.alert("Please enter a name."); DM.addItemSet(name); document.getElementById('newItemSetName').value = ''; renderItemSets(); ipcRenderer.send('save-kal', { data: DM.getProjectData(), saveAs: false }); });
+document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.send('save-kal', { data: DM.getProjectData(), saveAs: false }));
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
-
-function triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-}
-
-document.getElementById('unityBtn').addEventListener('click', () => {
-    if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded.");
-    const zip = new JSZip();
-    zip.file("KalivraData.json", DM.exportForUnity());
-    zip.file("EntitySO.cs", CS_ENTITY_SO);
-    zip.file("ItemSO.cs", CS_ITEM_SO);
-    zip.file("KalivraImporter.cs", CS_IMPORTER);
-    zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unity_Export.zip"); });
-});
-
-document.getElementById('unrealBtn').addEventListener('click', () => {
-    if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded.");
-    const zip = new JSZip();
-    zip.file("KalivraData_Unreal.json", DM.exportForUnreal());
-    zip.file("Readme_Unreal.txt", "[Kalivra Unreal Engine Import Guide]\n(Same as previous instructions...)");
-    zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unreal_Export.zip"); });
-});
-
+function triggerDownload(blob, filename) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
+document.getElementById('unityBtn').addEventListener('click', () => { if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded."); const zip = new JSZip(); zip.file("KalivraData.json", DM.exportForUnity()); zip.file("EntitySO.cs", CS_ENTITY_SO); zip.file("ItemSO.cs", CS_ITEM_SO); zip.file("KalivraImporter.cs", CS_IMPORTER); zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unity_Export.zip"); }); });
+document.getElementById('unrealBtn').addEventListener('click', () => { if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded."); const zip = new JSZip(); zip.file("KalivraData_Unreal.json", DM.exportForUnreal()); zip.file("Readme_Unreal.txt", "[Kalivra Unreal Engine Import Guide]\n(Same as previous instructions...)"); zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unreal_Export.zip"); }); });
 document.getElementById('bulkEditBtn').addEventListener('click', () => { dom.bulkModal.style.display = 'flex'; initBulkOptions(); refreshGrid(); });
 function initBulkOptions() { document.getElementById('bulkStatSelect').innerHTML = DM.getRules().stats.map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join(''); }
-function refreshGrid() { UI.renderBulkGrid(dom.gridCont, (selectedIds) => { selectedEntityIds = selectedIds; dom.selCount.innerText = selectedIds.length; }); }
-document.getElementById('applyBulkBtn').addEventListener('click', () => {
-    if (selectedEntityIds.length === 0) return ModalSystem.alert("Select entities first!"); 
-    const stat = document.getElementById('bulkStatSelect').value;
-    const op = document.getElementById('bulkOpSelect').value;
-    const val = parseFloat(document.getElementById('bulkValueInput').value) || 0;
-    DM.bulkUpdate(selectedEntityIds, stat, op, val);
-    refreshGrid(); refreshAll(); runSimulation();
-    const btn = document.getElementById('applyBulkBtn'); const originalText = btn.innerText;
-    btn.innerText = "Applied!"; setTimeout(() => btn.innerText = originalText, 1000);
-});
-
-ipcRenderer.on('load-finished', (e, data) => { 
-    DM.loadProject(data); undoStack.length=0; redoStack.length=0; 
-    comparisonSnapshotIndex = -1; updateComparisonDropdown(); refreshAll(); runSimulation(); 
-});
-ipcRenderer.on('save-finished', (e, msg) => ModalSystem.alert(msg));
+function refreshGrid() { UI.renderBulkGrid(dom.gridCont, (selectedIds) => { selectedEntityIds = selectedIds; dom.selCount.innerText = selectedIds.length; }, selectedEntityIds); }
+document.getElementById('applyBulkBtn').addEventListener('click', () => { if (selectedEntityIds.length === 0) return ModalSystem.alert("Select entities first!"); const stat = document.getElementById('bulkStatSelect').value; const op = document.getElementById('bulkOpSelect').value; const val = parseFloat(document.getElementById('bulkValueInput').value) || 0; executeCommand(new BulkStatChangeCommand(selectedEntityIds, stat, op, val)); const btn = document.getElementById('applyBulkBtn'); const originalText = btn.innerText; btn.innerText = "Applied!"; setTimeout(() => btn.innerText = originalText, 1000); });
+ipcRenderer.on('load-finished', (e, data) => { DM.loadProject(data); undoStack.length=0; redoStack.length=0; comparisonSnapshotIndex = -1; updateComparisonDropdown(); refreshAll(); runSimulation(); setModified(false); });
+ipcRenderer.on('save-finished', (e, msg) => { ModalSystem.alert(msg); setModified(false); });
 ipcRenderer.on('export-finished', (e, msg) => ModalSystem.alert(msg));
-
-document.getElementById('calcBtn').addEventListener('click', runSimulation);
+const maxLevelInput = document.getElementById('maxLevel');
+if(maxLevelInput) { maxLevelInput.addEventListener('input', () => { debouncedSimulation(); }); maxLevelInput.addEventListener('change', () => { runSimulation(); }); }
 dom.metric.addEventListener('change', runSimulation);
-document.getElementById('addBtn').addEventListener('click', () => {
-    const color = '#' + Math.floor(Math.random() * 16777215).toString(16);
-    const rules = DM.getRules();
-    const defaults = rules.defaultValues || {}; 
-    const newStats = {};
-    rules.stats.forEach(s => { newStats[s] = defaults[s] ? { ...defaults[s] } : { b: 0, g: 0 }; });
-    executeCommand(new AddEntityCommand({ id: Date.now(), name: 'New Unit', color, stats: newStats, variance: 0, isLocked: false }));
-});
+document.getElementById('addBtn').addEventListener('click', () => { const color = '#' + Math.floor(Math.random() * 16777215).toString(16); const rules = DM.getRules(); const defaults = rules.defaultValues || {}; const newStats = {}; rules.stats.forEach(s => { newStats[s] = defaults[s] ? { ...defaults[s] } : { b: 0, g: 0 }; }); executeCommand(new AddEntityCommand({ id: Date.now(), name: 'New Unit', color, stats: newStats, variance: 0, isLocked: false })); });
 document.getElementById('addItemBtn').addEventListener('click', () => { executeCommand(new AddItemCommand({ id: Date.now(), name: 'New Item', active: true, targets: DM.getEntities().map(e=>e.id), modifiers: [{ stat: DM.getRules().stats[0], op: "add", val: 10, when: "" }], traits: [] })); });
-['min','max','close'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
-
+['min','max'].forEach(a => { const btn = document.getElementById(a+'Btn'); if(btn) btn.addEventListener('click', () => ipcRenderer.send(a+'-app')); });
+document.getElementById('closeBtn').addEventListener('click', () => { if (isProjectModified) { ModalSystem.showExit(() => { ipcRenderer.send('save-kal', { data: DM.getProjectData(), saveAs: false }); setTimeout(() => ipcRenderer.send('close-app'), 500); }, () => { ipcRenderer.send('close-app'); }); } else { ipcRenderer.send('close-app'); } });
 const battleModal = document.getElementById('battleModal');
-document.getElementById('openBattleBtn').addEventListener('click', () => {
-    const sA = document.getElementById('battleEntA'), sB = document.getElementById('battleEntB');
-    sA.innerHTML = ''; sB.innerHTML = '<option value="all">ALL (League)</option>';
-    DM.getEntities().forEach(e => { sA.add(new Option(e.name, e.id)); sB.add(new Option(e.name, e.id)); });
-    battleModal.style.display = 'flex';
-});
-
+document.getElementById('openBattleBtn').addEventListener('click', () => { const sA = document.getElementById('battleEntA'), sB = document.getElementById('battleEntB'); sA.innerHTML = ''; sB.innerHTML = '<option value="all">ALL (League)</option>'; DM.getEntities().forEach(e => { sA.add(new Option(e.name, e.id)); sB.add(new Option(e.name, e.id)); }); battleModal.style.display = 'flex'; });
 document.getElementById('runBattleBtn').addEventListener('click', () => {
     const idA = parseInt(document.getElementById('battleEntA').value);
     const entA = DM.getEntities().find(e => e.id === idA);
     const lv = parseInt(document.getElementById('battleLevel').value);
     if (!entA) return ModalSystem.alert("Select Attacker!"); 
+    
     let statsA; try { statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); } catch (e) { return ModalSystem.alert(`Error getting Stats A: ${e.message}`); }
     const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
     const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
+    
     const results = [];
     const idB = document.getElementById('battleEntB').value;
     let targets = [];
     if (idB === 'all') targets = DM.getEntities().filter(e => e.id !== idA);
     else { const t = DM.getEntities().find(e => e.id == parseInt(idB)); if (t) targets.push(t); }
     if (targets.length === 0) return ModalSystem.alert("Target not found"); 
+    
     dom.battleLog.innerHTML = '<div style="padding:10px; text-align:center; color:#fee75c;">Simulating...</div>';
     dom.battleStatList.innerHTML = '';
+    
     setTimeout(() => {
         try {
             let allBattleResults = [];
             const battleCount = parseInt(document.getElementById('battleCount').value) || 100;
             const rules = DM.getRules();
+            const maxLv = parseInt(document.getElementById('maxLevel').value) || 20;
+
+            let phaseAnalysisHTML = '';
+
             targets.forEach(entB => {
                 const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), rules);
                 const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
                 const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
+                
                 const batchResult = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, battleCount, rules);
                 results.push(batchResult);
                 allBattleResults.push({ opponent: entB, statsB: statsB, result: batchResult });
+
+                if (targets.length === 1) {
+                    const phases = Battle.runPhaseAnalysis(battleEntA, battleEntB, DM.getItems(), rules, maxLv);
+                    
+                    const getRate = (p) => p.total > 0 ? ((p.wins / p.total) * 100).toFixed(1) : 0;
+                    const getBar = (rate) => `<div style="width:${rate}%; background-color:${rate >= 50 ? '#2da44e' : '#e74c3c'}; height:4px; border-radius:2px;"></div>`;
+                    
+                    phaseAnalysisHTML = `
+                    <div style="margin-bottom:15px; background:#18191c; border:1px solid #3e3e42; border-radius:4px; padding:10px;">
+                        <div style="font-weight:bold; color:#ccc; margin-bottom:8px; font-size:0.9em;">📊 Phase Analysis (Lv.1 ~ ${maxLv})</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; text-align:center;">
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#5fabff;">Early (Lv.1-${phases.Early.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Early)}%</div>
+                                ${getBar(getRate(phases.Early))}
+                            </div>
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#d29922;">Mid (Lv.${phases.Mid.min}-${phases.Mid.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Mid)}%</div>
+                                ${getBar(getRate(phases.Mid))}
+                            </div>
+                            <div style="background:#2f3136; padding:8px; border-radius:4px;">
+                                <div style="font-size:0.8em; color:#e74c3c;">Late (Lv.${phases.Late.min}-${phases.Late.max})</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#eee;">${getRate(phases.Late)}%</div>
+                                ${getBar(getRate(phases.Late))}
+                            </div>
+                        </div>
+                    </div>`;
+                }
             });
+
             Charts.renderBattleChart(document.getElementById('battleResultChart').getContext('2d'), results);
+            
             renderBattleLog(allBattleResults, entA.name);
+            if (phaseAnalysisHTML) {
+                dom.battleLog.insertAdjacentHTML('afterbegin', phaseAnalysisHTML);
+            }
+
             document.getElementById('statDisplayLevel').innerText = lv;
             renderBattleStats(entA, statsA, allBattleResults);
-        } catch (err) { dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`; ModalSystem.alert(`Simulation Failed:\n${err.message}`); } 
+
+        } catch (err) { 
+            dom.battleLog.innerHTML = `<div style="padding:10px; text-align:center; color:#e74c3c;"><strong>Simulation Error!</strong><br>${err.message}</div>`; 
+            ModalSystem.alert(`Simulation Failed:\n${err.message}`); 
+        } 
     }, 50);
 });
-
-function runDetailAnalysis(idA, idB, lv) {
-    const entA = DM.getEntities().find(e => e.id === idA);
-    const entB = DM.getEntities().find(e => e.id === idB);
-    if (!entA || !entB) return ModalSystem.alert("Entities not found.");
-    let statsA, statsB, battleEntA, battleEntB;
-    try {
-        statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules());
-        const itemsA = DM.getItems().filter(i => i.active && i.targets.includes(entA.id));
-        battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(i=>i.traits||[])] };
-        statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
-        const itemsB = DM.getItems().filter(i => i.active && i.targets.includes(entB.id));
-        battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(i=>i.traits||[])] };
-    } catch (e) { return ModalSystem.alert(e.message); } 
-    detailModal.style.display = 'flex';
-    detailModal.style.zIndex = "9999"; 
-    const titleEl = document.getElementById('detailTitle') || document.querySelector('#detailModal h2');
-    if (titleEl) titleEl.innerText = `${entA.name} vs ${entB.name}`;
-    document.getElementById('detailStats').innerText = "Running M.C Simulation (10,000 runs)...";
-    setTimeout(() => {
-        const startTime = performance.now();
-        const result = Battle.runMonteCarlo(battleEntA, statsA, battleEntB, statsB, 10000, DM.getRules());
-        const endTime = performance.now();
-        Charts.renderDetailCharts(document.getElementById('detailTurnChart').getContext('2d'), document.getElementById('detailHpChart').getContext('2d'), result);
-        const fwr = result.firstTurnWinRate.toFixed(1);
-        const fwrColor = result.firstTurnWinRate > 60 ? '#e74c3c' : (result.firstTurnWinRate < 40 ? '#e74c3c' : '#2da44e');
-        document.getElementById('detailStats').innerHTML = `<style>.stat-grid-item { background: #252526; padding: 10px; border-radius: 4px; text-align: center; border: 1px solid #3e3e42; } .stat-label { font-size: 0.8em; color: #888; display: block; margin-bottom: 4px; } .stat-value { font-size: 1.2em; font-weight: bold; color: #ddd; }</style><div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;"><div class="stat-grid-item"><span class="stat-label">Total Win Rate</span><span class="stat-value" style="color:${result.winRate>50?'#2da44e':'#e74c3c'}">${result.winRate.toFixed(2)}%</span></div><div class="stat-grid-item" style="border-color:${fwrColor}40"><span class="stat-label">Win% (When 1st)</span><span class="stat-value" style="color:${fwrColor}">${fwr}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg Turns</span><span class="stat-value" style="color:#d29922">${result.avgTurns.toFixed(2)}</span></div><div class="stat-grid-item"><span class="stat-label">Sim Time</span><span class="stat-value" style="color:#777">${(endTime-startTime).toFixed(0)}ms</span></div><div class="stat-grid-item"><span class="stat-label">Realized Crit %</span><span class="stat-value" style="color:#5fabff">${result.realizedCritRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Realized Dodge %</span><span class="stat-value" style="color:#b9bbbe">${result.realizedDodgeRate.toFixed(1)}%</span></div><div class="stat-grid-item"><span class="stat-label">Avg DPT</span><span class="stat-value" style="color:#e74c3c">${Math.round(result.avgDpt)}</span></div><div class="stat-grid-item"><span class="stat-label">Avg Overkill</span><span class="stat-value" style="color:#e67e22">${Math.round(result.avgOverkill)}</span></div></div>`;
-    }, 50);
-}
 if(btnDetail) { btnDetail.addEventListener('click', () => { const idA = parseInt(document.getElementById('battleEntA').value); const idB = document.getElementById('battleEntB').value; const lv = parseInt(document.getElementById('battleLevel').value); if (idB === 'all') return ModalSystem.alert("Select a single opponent for M.C."); runDetailAnalysis(idA, parseInt(idB), lv); }); }
 if (btnLeague) { btnLeague.addEventListener('click', () => { document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value; leagueModal.style.display = 'flex'; }); }
 if (btnRunLeague) {
     btnRunLeague.addEventListener('click', () => {
         const entities = DM.getEntities(); if (entities.length < 2) return ModalSystem.alert("Need at least 2 entities."); 
-        const lv = parseInt(document.getElementById('leagueLevel').value) || 20;
-        leagueContainer.innerHTML = '<div style="color:#fee75c;">Simulating League... This may take a moment.</div>';
+        const lv = parseInt(document.getElementById('leagueLevel').value) || 20; leagueContainer.innerHTML = '<div style="color:#fee75c;">Simulating League... This may take a moment.</div>';
         setTimeout(() => {
             const count = 100; const size = entities.length; const matrix = [];
             for (let i = 0; i < size; i++) {
-                const row = []; const entA = entities[i];
-                const statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules());
-                const itemsA = DM.getItems().filter(item => item.active && item.targets.includes(entA.id));
-                const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(it=>it.traits||[])] };
+                const row = []; const entA = entities[i]; const statsA = Sim.getStatsAtLevel(entA, lv, DM.getItems(), DM.getRules()); const itemsA = DM.getItems().filter(item => item.active && item.targets.includes(entA.id)); const battleEntA = { ...entA, traits: [...(entA.traits||[]), ...itemsA.flatMap(it=>it.traits||[])] };
                 for (let j = 0; j < size; j++) {
-                    const entB = entities[j]; if (i === j) { row.push(null); continue; }
-                    const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules());
-                    const itemsB = DM.getItems().filter(item => item.active && item.targets.includes(entB.id));
-                    const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(it=>it.traits||[])] };
-                    const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, count, DM.getRules());
-                    row.push(res.winRate);
+                    const entB = entities[j]; if (i === j) { row.push(null); continue; } const statsB = Sim.getStatsAtLevel(entB, lv, DM.getItems(), DM.getRules()); const itemsB = DM.getItems().filter(item => item.active && item.targets.includes(entB.id)); const battleEntB = { ...entB, traits: [...(entB.traits||[]), ...itemsB.flatMap(it=>it.traits||[])] };
+                    const res = Battle.runBattleBatch(battleEntA, statsA, battleEntB, statsB, count, DM.getRules()); row.push(res.winRate);
                 }
                 matrix.push(row);
             }
-            const totalCols = size + 1; leagueContainer.innerHTML = '';
-            const grid = document.createElement('div'); grid.className = 'matrix-container';
-            grid.style.gridTemplateColumns = `120px repeat(${size}, 60px)`; grid.style.gridTemplateRows = `40px repeat(${size}, 40px)`;
+            const totalCols = size + 1; leagueContainer.innerHTML = ''; const grid = document.createElement('div'); grid.className = 'matrix-container'; grid.style.gridTemplateColumns = `120px repeat(${size}, 60px)`; grid.style.gridTemplateRows = `40px repeat(${size}, 40px)`;
             const emptyCorner = document.createElement('div'); emptyCorner.className = 'matrix-header matrix-row-header matrix-col-header'; emptyCorner.innerText = "ATK \\ DEF"; grid.appendChild(emptyCorner);
             entities.forEach(ent => { const h = document.createElement('div'); h.className = 'matrix-header matrix-col-header'; h.innerText = ent.name; h.style.color = ent.color; h.style.writingMode = 'vertical'; grid.appendChild(h); });
             for (let i = 0; i < size; i++) {
                 const h = document.createElement('div'); h.className = 'matrix-header matrix-row-header'; h.innerText = entities[i].name; h.style.color = entities[i].color; grid.appendChild(h);
                 for (let j = 0; j < size; j++) {
-                    const cell = document.createElement('div'); cell.className = 'matrix-cell';
-                    const winRate = matrix[i][j];
+                    const cell = document.createElement('div'); cell.className = 'matrix-cell'; const winRate = matrix[i][j];
                     if (winRate === null) { cell.style.backgroundColor = '#222'; cell.innerText = '-'; } 
                     else { if (winRate > 60) cell.style.backgroundColor = 'rgba(45, 164, 78, 0.6)'; else if (winRate < 40) cell.style.backgroundColor = 'rgba(231, 76, 60, 0.6)'; else cell.style.backgroundColor = 'rgba(210, 153, 34, 0.6)'; cell.innerText = Math.round(winRate) + '%'; cell.addEventListener('click', () => { runDetailAnalysis(entities[i].id, entities[j].id, lv); }); cell.title = `${entities[i].name} vs ${entities[j].name}\nWin Rate: ${winRate.toFixed(1)}%`; }
                     grid.appendChild(cell);
@@ -953,84 +896,4 @@ if (btnRunLeague) {
         }, 50);
     });
 }
-function renderBattleLog(allResults, heroName) {
-    if (!allResults || allResults.length === 0) return;
-    dom.battleLog.innerHTML = '';
-    allResults.forEach((item, index) => {
-        const { opponent, result } = item;
-        const allLogs = result.allLogs || [];
-        const winRate = result.winRate.toFixed(1);
-        const avgTurns = result.avgTurns.toFixed(1);
-        const isWin = result.winRate >= 50;
-        const tagClass = isWin ? 'tag-win' : 'tag-lose';
-        const group = document.createElement('div'); group.className = 'log-group';
-        const header = document.createElement('div'); header.className = 'log-header';
-        header.innerHTML = `<span>VS ${opponent.name}</span><div style="display:flex; gap:10px; align-items:center;"><span style="font-size:0.8em; color:#ccc;">Avg Turns: <span style="color:#fee75c;">${avgTurns}</span></span><span class="win-tag ${tagClass}">Win ${winRate}%</span></div>`;
-        const content = document.createElement('div'); content.className = 'log-content';
-        const navContainer = document.createElement('div'); navContainer.style.display = 'flex'; navContainer.style.justifyContent = 'space-between'; navContainer.style.alignItems = 'center'; navContainer.style.marginBottom = '10px'; navContainer.style.paddingBottom = '10px'; navContainer.style.borderBottom = '1px solid #3e3e42';
-        const logTextBox = document.createElement('div'); logTextBox.className = 'log-text-box';
-        let currentLogIdx = 0; 
-        const updateLogDisplay = () => {
-            const logs = allLogs[currentLogIdx];
-            navContainer.innerHTML = `<button class="nav-btn prev-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">◀</button><span style="font-size:0.9em; font-weight:bold; color:#5fabff;">Battle ${currentLogIdx + 1} / ${allLogs.length}</span><button class="nav-btn next-log-btn" style="background:none; border:none; color:#ccc; cursor:pointer; font-weight:bold;">▶</button>`;
-            navContainer.querySelector('.prev-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx - 1 + allLogs.length) % allLogs.length; updateLogDisplay(); };
-            navContainer.querySelector('.next-log-btn').onclick = (e) => { e.stopPropagation(); currentLogIdx = (currentLogIdx + 1) % allLogs.length; updateLogDisplay(); };
-            if (logs && logs.length > 0) {
-                let html = ''; let currentTurn = 0;
-                logs.forEach(log => {
-                    if (log.turn !== currentTurn) { currentTurn = log.turn; html += `<div class="log-turn-divider">Turn ${currentTurn}</div>`; }
-                    const isHero = (log.actor === heroName); const actorClass = isHero ? 'log-actor-hero' : 'log-actor-enemy'; const valClass = log.action === 'attack' ? 'log-val-dmg' : 'log-val-heal';
-                    let msg = '';
-                    if (log.action === 'attack') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#aaa;">attacked</span> <span class="log-target">${log.target}</span> → <span class="${valClass}">-${log.val} HP</span>`;
-                    else if (log.action === 'die') msg = `<span class="${actorClass}">${log.actor}</span> <span style="color:#888;">${log.msg}</span>`;
-                    else if (log.action === 'miss') msg = `<span class="${actorClass}">${log.actor}</span>: <span style="color:#aaa;">Missed!</span>`;
-                    else msg = `<span class="${actorClass}">${log.actor}</span>: ${log.msg}`;
-                    html += `<div class="log-item-detail">${msg}</div>`;
-                });
-                html += `<div class="log-footer">Simulation End</div>`; logTextBox.innerHTML = html;
-            } else { logTextBox.innerHTML = '<div style="color:#666; text-align:center;">No log data available</div>'; }
-        };
-        if (allLogs.length > 0) { content.appendChild(navContainer); content.appendChild(logTextBox); updateLogDisplay(); } else { content.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">Logs disabled for huge counts</div>'; }
-        header.addEventListener('click', () => { content.classList.toggle('open'); });
-        group.appendChild(header); group.appendChild(content); dom.battleLog.appendChild(group);
-        if (index === 0) content.classList.add('open');
-    });
-}
-function renderBattleStats(attacker, statsA, allResults) {
-    const container = dom.battleStatList;
-    const createCard = (name, color, stats) => {
-        let rows = '';
-        for (const [key, val] of Object.entries(stats)) { if (typeof val === 'number') { const displayVal = Number.isInteger(val) ? val : val.toFixed(2); rows += `<div class="stat-row"><span class="stat-name">${key.toUpperCase()}</span><span class="stat-val">${displayVal}</span></div>`; } }
-        return `<div class="stat-card" style="border-left-color: ${color}"><div class="stat-card-header">${name}</div><div class="stat-grid">${rows}</div></div>`;
-    };
-    let html = createCard(attacker.name, attacker.color, statsA);
-    allResults.forEach(item => { const { opponent, statsB } = item; html += createCard(opponent.name, opponent.color, statsB); });
-    container.innerHTML = html;
-}
-
-Utils.initResizer(document.getElementById('resizerLeft'), document.getElementById('leftSidebar'), 'left', Charts.resizeCharts);
-Utils.initResizer(document.getElementById('resizerRight'), document.getElementById('rightSidebar'), 'right', Charts.resizeCharts);
-Utils.initResizer(document.getElementById('resizerVertical'), document.getElementById('analysisPanel'), 'vertical', Charts.resizeCharts);
-
-document.body.addEventListener('focusout', (e) => { 
-    const target = e.target; 
-    const formulaIds = ['dmgFormula', 'cpFormula', 'hitFormula'];
-    if (formulaIds.includes(target.id)) { const res = checkFormula(target.value); if (!res.valid) flashErrorOnLabel(target, res.error); }
-    else if (target.tagName === 'INPUT' && target.type === 'number') { const val = target.value; if (!val) return; if (isNaN(Number(val))) flashErrorOnLabel(target, "NaN"); } 
-});
-
-function initProject() {
-    ModalSystem.init();
-    injectComparisonUI(); 
-    setupExportDropdown();
-
-    const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
-    const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", acc: "Accuracy (명중)", eva: "Evasion (회피)", cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" };
-    const defaultValues = { hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } };
-    if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, defaultValues: defaultValues, dmgFormula: "atk * (100 / (100 + def))", hitFormula: "(a.acc - b.eva)", cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" }); }
-    updateComparisonDropdown();
-    refreshAll();
-}
 initProject();
-refreshAll();
-runSimulation();

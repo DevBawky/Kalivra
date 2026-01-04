@@ -1,5 +1,4 @@
 const { ipcMain } = require('electron');
-// [수정 1] exportJson을 추가로 불러옵니다.
 const { saveKal, loadKal, exportCsv, exportJson } = require('./fileManager');
 
 function registerHandlers(win) {
@@ -21,8 +20,8 @@ function registerHandlers(win) {
         }, 100);
     }); 
 
-    ipcMain.on('save-kal', async (e, data) => {
-        const msg = await saveKal(win, data);
+    ipcMain.on('save-kal', async (e, { data, saveAs }) => {
+        const msg = await saveKal(win, data, saveAs);
         if(msg) e.reply('save-finished', msg);
     });
 
