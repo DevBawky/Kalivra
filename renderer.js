@@ -493,6 +493,10 @@ class LoadItemSetCommand {
     execute() { DM.setItems(this.newItems); refreshAll(); runSimulation(); }
     undo() { DM.setItems(this.oldItems); refreshAll(); runSimulation(); }
 }
+// [NEW COMMANDS] Trait Undo/Redo Support
+class AddItemTraitCommand { constructor(item, trait, cb){ this.item=item; this.trait=trait; this.cb=cb; } execute(){ this.item.traits.push(this.trait); if(this.cb)this.cb(); } undo(){ this.item.traits.pop(); if(this.cb)this.cb(); } }
+class RemoveItemTraitCommand { constructor(item, idx, cb){ this.item=item; this.idx=idx; this.rm=null; this.cb=cb; } execute(){ this.rm=this.item.traits[this.idx]; this.item.traits.splice(this.idx,1); if(this.cb)this.cb(); } undo(){ this.item.traits.splice(this.idx,0,this.rm); if(this.cb)this.cb(); } }
+class ChangeItemTraitCommand { constructor(item, idx, oldVal, newVal, cb){ this.item=item; this.idx=idx; this.oldVal=oldVal; this.newVal=newVal; this.cb=cb; } execute(){ this.item.traits[this.idx] = JSON.parse(JSON.stringify(this.newVal)); if(this.cb)this.cb(); } undo(){ this.item.traits[this.idx] = JSON.parse(JSON.stringify(this.oldVal)); if(this.cb)this.cb(); } }
 
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (undoStack.length > 0) { const cmd = undoStack.pop(); cmd.undo(); redoStack.push(cmd); } }
@@ -520,7 +524,12 @@ function refreshAll() {
             onDelete: (i) => executeCommand(new RemoveItemCommand(i)),
             onModAdd: () => { executeCommand(new AddItemModCommand(item, { stat: DM.getRules().stats[0], op:'add', val:0, when: "" }, updateUI)); },
             onModDelete: (modIdx) => { executeCommand(new RemoveItemModCommand(item, modIdx, updateUI)); },
-            onModCommit: (mod, key, oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI)); }
+            onModCommit: (mod, key, oldVal, newVal) => { if(oldVal !== newVal) executeCommand(new ItemModChangeCommand(mod, key, oldVal, newVal, updateUI)); },
+            // [NEW] Callbacks for Target & Trait Undo/Redo
+            onTargetCommit: (oldTargets, newTargets) => { executeCommand(new PropertyChangeCommand(item, 'targets', oldTargets, newTargets, updateUI)); },
+            onTraitAdd: (newTrait) => { executeCommand(new AddItemTraitCommand(item, newTrait, updateUI)); },
+            onTraitDelete: (traitIdx) => { executeCommand(new RemoveItemTraitCommand(item, traitIdx, updateUI)); },
+            onTraitCommit: (traitIdx, oldTrait, newTrait) => { executeCommand(new ChangeItemTraitCommand(item, traitIdx, oldTrait, newTrait, updateUI)); }
         });
     });
 }
