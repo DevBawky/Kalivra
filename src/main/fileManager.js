@@ -1,7 +1,19 @@
 const fs = require('fs');
 const { dialog } = require('electron');
 
-async function saveKal(window, data) {
+let currentFilePath = null;
+
+async function saveKal(window, data, forceNewPath = false) {
+    if (currentFilePath && !forceNewPath) {
+        try {
+            fs.writeFileSync(currentFilePath, JSON.stringify(data, null, 2));
+            return 'Project saved.';
+        } catch (err) {
+            console.error(err);
+            return 'Save failed.';
+        }
+    }
+
     const result = await dialog.showSaveDialog(window, {
         title: 'Save Kalivra Project',
         defaultPath: 'project.kal',
@@ -19,6 +31,7 @@ async function saveKal(window, data) {
 
         try {
             fs.writeFileSync(savePath, JSON.stringify(data, null, 2));
+            currentFilePath = savePath;
             return 'Project saved successfully.';
         } catch (err) {
             console.error(err);
@@ -41,6 +54,7 @@ async function loadKal(window) {
     if (!result.canceled && result.filePaths.length > 0) {
         try {
             const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+            currentFilePath = result.filePaths[0];
             return JSON.parse(content);
         } catch (err) {
             console.error(err);

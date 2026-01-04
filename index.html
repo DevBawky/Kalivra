@@ -11,16 +11,9 @@
     <link rel="stylesheet" href="css/modules.css">
     
     <style>
-        .chart-container { 
-            position: relative; 
-            flex: 1; 
-            min-height: 0; 
-            width: 100%; 
-            background-color: #202225;
-            
-            box-sizing: border-box;
-            overflow: hidden;
-        }        
+        .chart-container { position: relative; flex: 1; min-height: 0; width: 100%; background-color: #202225; box-sizing: border-box; overflow: hidden; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-content { background-color: #2f3136; padding: 20px; border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); max-height: 95vh; overflow-y: auto; position: relative; }
         .matrix-container { display: grid; gap: 2px; background-color: #111; border: 1px solid #444; overflow: auto; max-height: 600px; }
         .matrix-cell { display: flex; justify-content: center; align-items: center; font-size: 0.8em; color: #fff; cursor: pointer; transition: opacity 0.2s; position: relative; }
         .matrix-cell:hover { opacity: 0.8; z-index: 10; border: 1px solid #fff; }
@@ -39,7 +32,6 @@
         .snapshot-actions button { background: none; border: none; cursor: pointer; color: #888; margin-left: 5px; }
         .snapshot-actions button:hover { color: #fff; }
         
-        /* Grid Table Styles */
         .bulk-table { width: 100%; border-collapse: collapse; background: #1e1e1e; color: #ccc; font-size: 0.9em; min-width: 800px; }
         .bulk-table th, .bulk-table td { border: 1px solid #333; padding: 6px 8px; text-align: center; }
         .bulk-table th { background: #252526; position: sticky; top: 0; z-index: 10; font-weight: bold; color: #eee; text-align: center; }
@@ -49,16 +41,11 @@
     </style>
 </head>
 <body>
-    <div class="custom-title-bar">
-        <div class="title-drag-area"><span class="app-title">Kalivra</span></div>
-        <div class="window-controls">
-            <button id="minBtn" class="win-btn">─</button>
-            <button id="maxBtn" class="win-btn">◻</button>
-            <button id="closeBtn" class="win-btn close-btn">✕</button>
-        </div>
-    </div>
-
     <div class="top-toolbar">
+        <div class="toolbar-group">
+            <span id="appTitle" style="font-weight:900; font-size:1.1em; color:#eee; letter-spacing:1px; cursor:default; margin-right: 10px;">Kalivra</span>
+        </div>
+
         <div class="toolbar-group">
             <button id="saveBtn" class="tool-btn success" title="Save Project (Ctrl+S)"><span>💾</span> Save</button>
             <button id="loadBtn" class="tool-btn secondary" title="Load Project"><span>📂</span> Load</button>
@@ -85,6 +72,12 @@
             <button id="exportBtn" class="tool-btn warning"><span>📄</span> Export ▼</button>
             <button id="unityBtn" class="tool-btn unity" title="Export for Unity"><span style="color:#fff;">🎮</span></button>
             <button id="unrealBtn" class="tool-btn unreal" title="Export for Unreal"><span style="color:#fff;">ⓤ</span></button>
+        </div>
+
+        <div class="window-controls">
+            <button id="minBtn" class="win-btn">─</button>
+            <button id="maxBtn" class="win-btn">◻</button>
+            <button id="closeBtn" class="win-btn close-btn">✕</button>
         </div>
     </div>
 
