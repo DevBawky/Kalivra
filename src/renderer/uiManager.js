@@ -237,17 +237,23 @@ function renderItemCard(item, index, container, callbacks) {
     container.appendChild(card);
 }
 
-function renderBulkGrid(container, onSelectionChange) {
+function renderBulkGrid(container, onSelectionChange, preSelectedIds = []) {
     const entities = DM.getEntities();
     const stats = DM.getRules().stats;
     
-    let html = `<table class="bulk-table"><thead><tr><th><input type="checkbox" id="selectAllBulk"></th><th>Name</th>`;
+    const allSelected = entities.length > 0 && entities.every(e => preSelectedIds.includes(e.id));
+    
+    let html = `<table class="bulk-table"><thead><tr><th><input type="checkbox" id="selectAllBulk" ${allSelected ? 'checked' : ''}></th><th>Name</th>`;
     stats.forEach(s => html += `<th>${s.toUpperCase()} (Base)</th>`);
     html += `</tr></thead><tbody>`;
 
     entities.forEach(ent => {
-        html += `<tr data-id="${ent.id}">
-            <td><input type="checkbox" class="row-select" data-id="${ent.id}"></td>
+        const isChecked = preSelectedIds.includes(ent.id);
+        const checkedStr = isChecked ? 'checked' : '';
+        const rowClass = isChecked ? 'selected' : '';
+
+        html += `<tr data-id="${ent.id}" class="${rowClass}">
+            <td><input type="checkbox" class="row-select" data-id="${ent.id}" ${checkedStr}></td>
             <td>${ent.name}</td>`;
         stats.forEach(s => {
             const val = ent.stats[s]?.b || 0;
@@ -261,14 +267,17 @@ function renderBulkGrid(container, onSelectionChange) {
     const rows = container.querySelectorAll('tbody tr');
     const updateSelection = () => {
         const selected = Array.from(container.querySelectorAll('.row-select:checked')).map(el => parseInt(el.dataset.id));
+        
         rows.forEach(r => {
             const isSel = selected.includes(parseInt(r.dataset.id));
             if(isSel) r.classList.add('selected'); else r.classList.remove('selected');
         });
+        
         onSelectionChange(selected);
     };
 
     container.querySelectorAll('.row-select').forEach(cb => cb.addEventListener('change', updateSelection));
+    
     container.querySelector('#selectAllBulk').addEventListener('change', (e) => {
         container.querySelectorAll('.row-select').forEach(cb => cb.checked = e.target.checked);
         updateSelection();

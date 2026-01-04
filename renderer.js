@@ -293,6 +293,55 @@ const closeItemSet = document.querySelector('.close-itemset');
 const saveItemSetBtn = document.getElementById('saveItemSetBtn');
 const itemSetList = document.getElementById('itemSetList');
 
+class BulkStatChangeCommand {
+    constructor(ids, stat, op, val) {
+        this.ids = ids;
+        this.stat = stat;
+        this.op = op;
+        this.val = val;
+        this.history = [];
+    }
+
+    execute() {
+        this.history = [];
+        const entities = DM.getEntities();
+        
+        entities.forEach(ent => {
+            if (this.ids.includes(ent.id)) {
+                if (!ent.stats[this.stat]) ent.stats[this.stat] = { b: 0, g: 0 };
+                
+                const oldVal = ent.stats[this.stat].b;
+                this.history.push({ id: ent.id, oldVal: oldVal });
+
+                let newVal = oldVal;
+                if (this.op === 'set') newVal = this.val;
+                else if (this.op === 'add') newVal += this.val;
+                else if (this.op === 'mult') newVal *= this.val;
+
+                ent.stats[this.stat].b = parseFloat(newVal.toFixed(2));
+            }
+        });
+
+        refreshGrid(); 
+        refreshAll(); 
+        runSimulation();
+    }
+
+    undo() {
+        const entities = DM.getEntities();
+        this.history.forEach(rec => {
+            const ent = entities.find(e => e.id === rec.id);
+            if (ent && ent.stats[this.stat]) {
+                ent.stats[this.stat].b = rec.oldVal;
+            }
+        });
+
+        refreshGrid(); 
+        refreshAll(); 
+        runSimulation();
+    }
+}
+
 function injectComparisonUI() {
     const parent = dom.metric.parentElement;
     if (!parent || document.getElementById('compareSnapshotSelect')) return;
@@ -814,16 +863,25 @@ document.getElementById('unrealBtn').addEventListener('click', () => {
 
 document.getElementById('bulkEditBtn').addEventListener('click', () => { dom.bulkModal.style.display = 'flex'; initBulkOptions(); refreshGrid(); });
 function initBulkOptions() { document.getElementById('bulkStatSelect').innerHTML = DM.getRules().stats.map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join(''); }
-function refreshGrid() { UI.renderBulkGrid(dom.gridCont, (selectedIds) => { selectedEntityIds = selectedIds; dom.selCount.innerText = selectedIds.length; }); }
+function refreshGrid() { 
+    UI.renderBulkGrid(dom.gridCont, (selectedIds) => { 
+        selectedEntityIds = selectedIds; 
+        dom.selCount.innerText = selectedIds.length; 
+    }, selectedEntityIds);
+}
 document.getElementById('applyBulkBtn').addEventListener('click', () => {
     if (selectedEntityIds.length === 0) return ModalSystem.alert("Select entities first!"); 
+    
     const stat = document.getElementById('bulkStatSelect').value;
     const op = document.getElementById('bulkOpSelect').value;
     const val = parseFloat(document.getElementById('bulkValueInput').value) || 0;
-    DM.bulkUpdate(selectedEntityIds, stat, op, val);
-    refreshGrid(); refreshAll(); runSimulation();
-    const btn = document.getElementById('applyBulkBtn'); const originalText = btn.innerText;
-    btn.innerText = "Applied!"; setTimeout(() => btn.innerText = originalText, 1000);
+
+    executeCommand(new BulkStatChangeCommand(selectedEntityIds, stat, op, val));
+
+    const btn = document.getElementById('applyBulkBtn'); 
+    const originalText = btn.innerText;
+    btn.innerText = "Applied!"; 
+    setTimeout(() => btn.innerText = originalText, 1000);
 });
 
 ipcRenderer.on('load-finished', (e, data) => { 
@@ -1027,6 +1085,7 @@ document.body.addEventListener('focusout', (e) => {
     if (formulaIds.includes(target.id)) { const res = checkFormula(target.value); if (!res.valid) flashErrorOnLabel(target, res.error); }
     else if (target.tagName === 'INPUT' && target.type === 'number') { const val = target.value; if (!val) return; if (isNaN(Number(val))) flashErrorOnLabel(target, "NaN"); } 
 });
+
 
 function initProject() {
     ModalSystem.init();
