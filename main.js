@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { registerHandlers } = require('./src/main/ipcHandlers');
+require('dotenv').config();
 
 function createWindow () {
   const win = new BrowserWindow({

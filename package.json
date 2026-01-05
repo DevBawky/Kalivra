@@ -59,5 +59,8 @@
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "firebase": "^12.7.0"
   }
 }
