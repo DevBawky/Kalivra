@@ -785,7 +785,7 @@ function initProject() {
                 {
                     name: "Golden Egg",
                     triggers: [{
-                        type: "OnAttackHit",
+                        type: "OnHitTaken",
                         conditions: [{ type: "Chance", value: 30 }],
                         effects: [{ type: "Heal", target: "Self", valueType: "Fixed", value: 20 }]
                     }]
@@ -804,6 +804,8 @@ function initProject() {
         initBulkOptions(); 
         refreshGrid(); 
     }
+
+    DM.getEntities();
 }
 
 const configModal = document.getElementById('configModal');

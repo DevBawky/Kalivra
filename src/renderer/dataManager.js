@@ -53,16 +53,16 @@ let projectData = {
                 active: true,
                 targets: [1001],
                 modifiers: [
-                    { stat: 'atk', op: 'mult', val: 1.5 },
+                    { stat: 'atk', op: 'mult', val: 1.1 },
                     { stat: 'aspd', op: 'add', val: 0.5 }
                 ],
                 traits: [
                     {
                         name: "Golden Egg",
                         triggers: [{
-                            type: "OnAttackHit",
+                            type: "OnCritical",
                             conditions: [{ type: "Chance", value: 30 }],
-                            effects: [{ type: "Heal", target: "Self", valueType: "Fixed", value: 20 }]
+                            effects: [{ type: "Heal", target: "Self", valueType: "PercentOfDamage", value: 20 }]
                         }]
                     }
                 ]
@@ -169,6 +169,10 @@ const DM = {
             projectData.snapshots = [];
             projectData.itemSets = [];
         }
+    },
+
+    hasProjectData: () => {
+        return projectData && projectData.current;
     },
     
     getProjectData: () => projectData,
