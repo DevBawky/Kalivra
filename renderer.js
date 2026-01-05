@@ -200,17 +200,16 @@ function setupExportDropdown() {
     contentDiv.id = 'exportDropdownContent';
     contentDiv.className = 'dropdown-content';
     
-    // [NEW] PDF Report Button
     const btnPDF = document.createElement('button');
-    btnPDF.innerHTML = '📑 To PDF Report';
+    btnPDF.innerHTML = 'to PDF';
     btnPDF.onclick = (e) => {
         e.stopPropagation();
-        generateReport(); // 리포트 생성 호출
+        generateReport();
         contentDiv.classList.remove('show-dropdown');
     };
 
     const btnCSV = document.createElement('button');
-    btnCSV.innerHTML = '📄 To CSV (Table)';
+    btnCSV.innerHTML = 'to CSV';
     btnCSV.onclick = (e) => {
         e.stopPropagation();
         exportToCSV(); 
@@ -218,7 +217,7 @@ function setupExportDropdown() {
     };
 
     const btnJSON = document.createElement('button');
-    btnJSON.innerHTML = '📦 To JSON (Share)';
+    btnJSON.innerHTML = 'to JSON';
     btnJSON.onclick = (e) => {
         e.stopPropagation();
         exportToJSON(); 
@@ -615,7 +614,6 @@ function runSimulation() {
     if (Charts && Charts.renderMainChart) Charts.renderMainChart(document.getElementById('balanceChart').getContext('2d'), labels, datasets);
     let logHTML = '';
     
-    // [FIXED] Snapshot Comparison Logic Restored
     if (hasSnapshot) {
         const snapshot = DM.getSnapshots()[comparisonSnapshotIndex];
         const snapName = snapshot ? snapshot.name : "Snapshot";
@@ -706,13 +704,108 @@ document.body.addEventListener('focusout', (e) => {
 });
 
 function initProject() {
-    ModalSystem.init(); injectComparisonUI(); setupExportDropdown();
+    ModalSystem.init(); 
+    injectComparisonUI(); 
+    setupExportDropdown();
+    
     const defaultStats = ['hp', 'atk', 'def', 'acc', 'eva', 'cric', 'crid', 'aspd'];
-    const defaultDescriptions = { hp: "Health Point", atk: "Base Damage", def: "Defense", acc: "Accuracy (명중)", eva: "Evasion (회피)", cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" };
-    const defaultValues = { hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } };
-    if (!DM.hasProjectData()) { DM.setRules({ stats: defaultStats, descriptions: defaultDescriptions, defaultValues: defaultValues, dmgFormula: "atk * (100 / (100 + def))", hitFormula: "(a.acc - b.eva)", cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" }); }
-    updateComparisonDropdown(); refreshAll(); runSimulation();
-    if(dom.gridCont) { initBulkOptions(); refreshGrid(); }
+    const defaultDescriptions = { 
+        hp: "Health Point", atk: "Base Damage", def: "Defense", 
+        acc: "Accuracy (명중)", eva: "Evasion (회피)", 
+        cric: "Critical Chance", crid: "Critical Damage", aspd: "Attack Speed" 
+    };
+    const defaultValues = { 
+        hp: { b: 200, g: 20 }, atk: { b: 20, g: 2 }, acc: { b: 95, g: 0 }, 
+        def: { b: 5, g: 0 }, aspd: { b: 1.0, g: 0 }, eva: { b: 20, g: 1 }, 
+        cric: { b: 15, g: 0 }, crid: { b: 1.5, g: 0 } 
+    };
+
+    if (!DM.hasProjectData()) {
+        DM.setRules({ 
+            stats: defaultStats, 
+            descriptions: defaultDescriptions, 
+            defaultValues: defaultValues, 
+            dmgFormula: "atk * (100 / (100 + def))", 
+            hitFormula: "(a.acc - b.eva)", 
+            cpFormula: "hp * 0.5 + atk * 2 + def + acc + eva + aspd * 5" 
+        });
+
+        const chickenId = Date.now();
+        const godzillaId = chickenId + 1;
+
+        const chicken = {
+            id: chickenId,
+            name: 'Chicken',
+            color: '#ffcc00',
+            stats: {
+                hp: { b: 150, g: 15 },
+                atk: { b: 25, g: 5 },
+                def: { b: 2, g: 0.5 },
+                acc: { b: 100, g: 0 },
+                eva: { b: 30, g: 2 },
+                cric: { b: 20, g: 0 },
+                crid: { b: 2.0, g: 0 },
+                aspd: { b: 1.5, g: 0.1 }
+            },
+            variance: 0.1,
+            isLocked: false
+        };
+
+        const godzilla = {
+            id: godzillaId,
+            name: 'Godzilla',
+            color: '#4ecca3',
+            stats: {
+                hp: { b: 500, g: 100 },
+                atk: { b: 50, g: 10 },
+                def: { b: 20, g: 5 },
+                acc: { b: 80, g: 0 },
+                eva: { b: 5, g: 0 },
+                cric: { b: 10, g: 0 },
+                crid: { b: 1.5, g: 0 },
+                aspd: { b: 0.5, g: 0.02 }
+            },
+            variance: 0.2,
+            isLocked: false
+        };
+
+        DM.addEntity(chicken);
+        DM.addEntity(godzilla);
+
+        const bawkyItem = {
+            id: Date.now() + 2,
+            name: 'Bawky',
+            active: true,
+            targets: [chickenId],
+            modifiers: [
+                { stat: 'atk', op: 'mult', val: 1.5 },
+                { stat: 'aspd', op: 'add', val: 0.5 }
+            ],
+            traits: [
+                {
+                    name: "Golden Egg",
+                    triggers: [{
+                        type: "OnHitTaken",
+                        conditions: [{ type: "Chance", value: 30 }],
+                        effects: [{ type: "Heal", target: "Self", valueType: "Fixed", value: 20 }]
+                    }]
+                }
+            ]
+        };
+
+        DM.addItem(bawkyItem);
+    }
+
+    updateComparisonDropdown(); 
+    refreshAll();
+    runSimulation();
+    
+    if(dom.gridCont) { 
+        initBulkOptions(); 
+        refreshGrid(); 
+    }
+
+    DM.getEntities();
 }
 
 const configModal = document.getElementById('configModal');
@@ -769,7 +862,14 @@ function initBulkOptions() { document.getElementById('bulkStatSelect').innerHTML
 function refreshGrid() { UI.renderBulkGrid(dom.gridCont, (selectedIds) => { selectedEntityIds = selectedIds; dom.selCount.innerText = selectedIds.length; }, selectedEntityIds); }
 document.getElementById('applyBulkBtn').addEventListener('click', () => { if (selectedEntityIds.length === 0) return ModalSystem.alert("Select entities first!"); const stat = document.getElementById('bulkStatSelect').value; const op = document.getElementById('bulkOpSelect').value; const val = parseFloat(document.getElementById('bulkValueInput').value) || 0; executeCommand(new BulkStatChangeCommand(selectedEntityIds, stat, op, val)); const btn = document.getElementById('applyBulkBtn'); const originalText = btn.innerText; btn.innerText = "Applied!"; setTimeout(() => btn.innerText = originalText, 1000); });
 ipcRenderer.on('load-finished', (e, data) => { DM.loadProject(data); undoStack.length=0; redoStack.length=0; comparisonSnapshotIndex = -1; updateComparisonDropdown(); refreshAll(); runSimulation(); setModified(false); });
-ipcRenderer.on('save-finished', (e, msg) => { ModalSystem.alert(msg); setModified(false); });
+ipcRenderer.on('save-finished', (e, msg) => {
+    if (msg === 'Project saved.') {
+        console.log("Auto-saved to existing file.");
+    } else {
+        ModalSystem.alert(msg);
+    }
+    setModified(false);
+});
 ipcRenderer.on('export-finished', (e, msg) => ModalSystem.alert(msg));
 const maxLevelInput = document.getElementById('maxLevel');
 if(maxLevelInput) { maxLevelInput.addEventListener('input', () => { debouncedSimulation(); }); maxLevelInput.addEventListener('change', () => { runSimulation(); }); }
