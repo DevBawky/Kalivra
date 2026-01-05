@@ -61,7 +61,6 @@
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
-    "dotenv": "^17.2.3",
     "firebase": "^12.7.0"
   }
 }
