@@ -29,6 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.FIREBASE }}" > .env
+
       - name: Build/Release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
