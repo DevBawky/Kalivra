@@ -7,7 +7,10 @@
   "license": "ISC",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder --win --mac --linux"
   },
   "build": {
     "productName": "Kalivra",
@@ -36,15 +39,16 @@
       "assets/**/*"
     ],
     "mac": {
-      "target": "dmg",
-      "icon": "assets/AppIcon.icns"
+      "target": ["dmg", "zip"],
+      "icon": "assets/AppIcon.icns",
+      "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/AppIcon.png"
+      "target": ["AppImage", "deb"],
+      "icon": "assets/AppIcon.png",
+      "category": "Development"
     }
   },
-  "keywords": [],
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12"
