@@ -9,7 +9,7 @@
 
   ![Electron](https://img.shields.io/badge/Electron-39.2.7-blue?logo=electron)
   ![Category](https://img.shields.io/badge/Category-Game%20Dev%20Tool-orange)
-  ![Version](https://img.shields.io/badge/version-0.1.0--alpha-green)
+  ![Version](https://img.shields.io/badge/version-1.0.0--alpha-green)
   ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 </div>
 
