@@ -1,4 +1,6 @@
 const { ipcRenderer } = require('electron');
+const { sendFeedback } = require('./src/services/feedbackService');
+
 const DM = require('./src/renderer/dataManager');
 const Sim = require('./src/renderer/calculator');
 const UI = require('./src/renderer/uiManager');
@@ -964,6 +966,7 @@ document.getElementById('runBattleBtn').addEventListener('click', () => {
         } 
     }, 50);
 });
+
 if(btnDetail) { btnDetail.addEventListener('click', () => { const idA = parseInt(document.getElementById('battleEntA').value); const idB = document.getElementById('battleEntB').value; const lv = parseInt(document.getElementById('battleLevel').value); if (idB === 'all') return ModalSystem.alert("Select a single opponent for M.C."); runDetailAnalysis(idA, parseInt(idB), lv); }); }
 if (btnLeague) { btnLeague.addEventListener('click', () => { document.getElementById('leagueLevel').value = document.getElementById('maxLevel').value; leagueModal.style.display = 'flex'; }); }
 if (btnRunLeague) {
@@ -996,4 +999,79 @@ if (btnRunLeague) {
         }, 50);
     });
 }
+
+const feedbackModal = document.getElementById('feedback-modal');
+const feedbackBtn = document.getElementById('feedbackBtn');
+const closeModal = document.getElementById('close-feedback-modal');
+const sendBtn = document.getElementById('send-feedback');
+
+if (feedbackBtn) {
+    feedbackBtn.onclick = () => {
+        feedbackModal.style.display = 'flex';
+    };
+}
+
+if (closeModal) {
+    closeModal.onclick = () => {
+        feedbackModal.style.display = 'none';
+    };
+}
+
+if (sendBtn) {
+    sendBtn.onclick = async () => {
+        const type = document.getElementById('feedback-type').value;
+        const content = document.getElementById('feedback-content').value;
+
+        if (!content.trim()) {
+            ModalSystem.alert("Please enter your feedback!");
+            return;
+        }
+
+        sendBtn.disabled = true;
+        sendBtn.innerText = "Sending...";
+
+        try {
+            const result = await sendFeedback({ type, content });
+
+            if (result.success) {
+                ModalSystem.alert("Feedback sent successfully. Thank you!");
+                feedbackModal.style.display = 'none';
+                document.getElementById('feedback-content').value = "";
+            } else {
+                ModalSystem.alert("Sending failed : " + (result.error?.message || "Unknown error"));
+            }
+        } catch (err) {
+            ModalSystem.alert("An Error occured : " + err.message);
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerText = "Send";
+        }
+    };
+}
+function setupFeedback() {
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackBtn = document.getElementById('feedback-btn');
+    const closeModal = document.getElementById('close-modal');
+    const sendBtn = document.getElementById('send-feedback');
+
+    if (feedbackBtn && feedbackModal) {
+        feedbackBtn.onclick = () => {
+            feedbackModal.style.display = 'flex';
+        };
+    }
+
+    if (closeModal) {
+        closeModal.onclick = () => {
+            feedbackModal.style.display = 'none';
+        };
+    }
+    
+    window.onclick = (event) => {
+        if (event.target == feedbackModal) {
+            feedbackModal.style.display = "none";
+        }
+    };
+}
+
 initProject();
+setupFeedback();

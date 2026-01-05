@@ -39,12 +39,18 @@
       "assets/**/*"
     ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "assets/AppIcon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/AppIcon.png",
       "category": "Development"
     }
@@ -52,5 +58,8 @@
   "devDependencies": {
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "firebase": "^12.7.0"
   }
 }

@@ -10,3 +10,5 @@ build/
 *.log
 balance_data.json
 balance_project.json
+
+.env
