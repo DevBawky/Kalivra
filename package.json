@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Kalivra Application",
   "main": "main.js",
-  "author": "Bawky",
+  "author": "Bawky <ghini7170@gmail.com>",
   "license": "ISC",
   "scripts": {
     "start": "electron .",
@@ -39,14 +39,21 @@
       "assets/**/*"
     ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "assets/AppIcon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/AppIcon.png",
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "Bawky <ghini7170@gmail.com>"
     }
   },
   "devDependencies": {
