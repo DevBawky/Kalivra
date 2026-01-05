@@ -98,7 +98,6 @@ function renderDetailCharts(turnCtx, hpCtx, data) {
     if (detailTurnChart) detailTurnChart.destroy();
     if (detailHpChart) detailHpChart.destroy();
 
-    // 1. Turn Chart (Bar)
     const turns = Object.keys(data.turnDist).map(Number).sort((a,b)=>a-b);
     const turnCounts = turns.map(t => data.turnDist[t]);
 
@@ -121,7 +120,6 @@ function renderDetailCharts(turnCtx, hpCtx, data) {
         }
     });
 
-    // 2. HP Chart (Histogram like)
     const createBuckets = (arr) => {
         const buckets = {};
         arr.forEach(val => {

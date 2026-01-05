@@ -20,6 +20,21 @@
       "target": "nsis",
       "icon": "assets/AppIcon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kalivra",
+      "installerIcon": "assets/AppIcon.ico",
+      "uninstallerIcon": "assets/AppIcon.ico",
+      "uninstallDisplayName": "Kalivra (Bawky)",
+      "runAfterFinish": true
+    },
+    "files": [
+      "**/*",
+      "assets/**/*"
+    ],
     "mac": {
       "target": "dmg",
       "icon": "assets/AppIcon.icns"

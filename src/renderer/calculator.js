@@ -1,4 +1,3 @@
-// 1. 수식 계산기
 function calculateValue(formula, statsSnapshot) {
     try {
         const keys = Object.keys(statsSnapshot);
@@ -7,7 +6,6 @@ function calculateValue(formula, statsSnapshot) {
     } catch (e) { return 0; }
 }
 
-// 2. 수식 유효성 검증기
 function validateFormula(formula, statNames) {
     const dummyStats = {};
     statNames.forEach(s => dummyStats[s] = 1);
@@ -21,7 +19,6 @@ function validateFormula(formula, statNames) {
     }
 }
 
-// 3. 레벨별 스탯 계산기
 function getStatsAtLevel(ent, lv, items, rules) {
     let currentStats = {};
     rules.stats.forEach(statName => {
@@ -42,7 +39,6 @@ function getStatsAtLevel(ent, lv, items, rules) {
     return currentStats;
 }
 
-// 4. [중요] Crossover 감지기 클래스
 class CrossoverDetector {
     constructor() {
         this.prevDiff = null;
@@ -53,7 +49,6 @@ class CrossoverDetector {
         let result = null;
 
         if (this.prevDiff !== null) {
-            // 부호가 바뀌거나, 0이 되었다면 교차
             if (this.prevDiff * currDiff <= 0 && this.prevDiff !== currDiff) {
                 if (currDiff > 0) result = "GOLDEN_CROSS";
                 else if (currDiff < 0) result = "DEAD_CROSS";
@@ -65,7 +60,6 @@ class CrossoverDetector {
     }
 }
 
-// 5. 분석 함수
 function analyzeCrossovers(rawData, maxLv) {
     const names = Object.keys(rawData);
     if (names.length < 2) return [];
