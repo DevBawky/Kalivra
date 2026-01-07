@@ -858,7 +858,53 @@ document.getElementById('saveBtn').addEventListener('click', () => ipcRenderer.s
 document.getElementById('loadBtn').addEventListener('click', () => ipcRenderer.send('load-kal'));
 function triggerDownload(blob, filename) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
 document.getElementById('unityBtn').addEventListener('click', () => { if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded."); const zip = new JSZip(); zip.file("KalivraData.json", DM.exportForUnity()); zip.file("EntitySO.cs", CS_ENTITY_SO); zip.file("ItemSO.cs", CS_ITEM_SO); zip.file("KalivraImporter.cs", CS_IMPORTER); zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unity_Export.zip"); }); });
-document.getElementById('unrealBtn').addEventListener('click', () => { if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded."); const zip = new JSZip(); zip.file("KalivraData_Unreal.json", DM.exportForUnreal()); zip.file("Readme_Unreal.txt", "[Kalivra Unreal Engine Import Guide]\n(Same as previous instructions...)"); zip.generateAsync({type:"blob"}).then(function(content) { triggerDownload(content, "Kalivra_Unreal_Export.zip"); }); });
+document.getElementById('unrealBtn').addEventListener('click', () => {
+    if (!window.JSZip) return ModalSystem.alert("JSZip library not loaded.");
+    
+    const zip = new JSZip();
+    
+    zip.file("KalivraData_Unreal.json", DM.exportForUnreal());
+    
+    const readmeContent = `[Kalivra Unreal Engine Import Guide]
+
+1. Plugin Activation
+- Go to 'Edit' > 'Plugins' in Unreal Engine.
+- Search for "Web Browser" and ensure it is enabled.
+- Restart the engine if necessary.
+
+2. Create UI Widget
+- Right-click in the Content Browser and select 'User Interface' > 'Widget Blueprint'.
+- Name it 'WBP_Kalivra' and open the editor.
+- Search for 'Web Browser' in the Palette and drag it into the Canvas Panel.
+
+3. Configuration
+- In the Details panel of the Web Browser widget, enter your project URL in the 'Initial URL' field.
+- Use the 'Add to Viewport' node in your Blueprint to display the widget.
+
+--------------------------------------------------
+
+[Kalivra 언리얼 엔진 임포트 가이드]
+
+1. 플러그인 활성화
+- 언리얼 엔진의 'Edit' > 'Plugins' 메뉴로 이동합니다.
+- "Web Browser"를 검색하고 체크되어 있는지 확인합니다.
+- 체크되어 있지 않다면 체크 후 엔진을 재시작합니다.
+
+2. UI 위젯 생성
+- 콘텐츠 브라우저에서 우클릭 후 'User Interface' > 'Widget Blueprint'를 생성합니다.
+- 이름을 'WBP_Kalivra'로 지정하고 에디터를 엽니다.
+- 팔레트(Palette) 창에서 'Web Browser'를 검색하여 캔버스 패널에 배치합니다.
+
+3. 설정 및 실행
+- 배치한 Web Browser 컴포넌트의 디테일 패널에서 'Initial URL' 항목에 프로젝트 주소를 입력합니다.
+- 블루프린트에서 'Add to Viewport' 노드를 사용하여 위젯을 화면에 출력하세요.`;
+
+    zip.file("Readme_Unreal.txt", readmeContent);
+    
+    zip.generateAsync({type:"blob"}).then(function(content) {
+        triggerDownload(content, "Kalivra_Unreal_Export.zip");
+    });
+});
 document.getElementById('bulkEditBtn').addEventListener('click', () => { dom.bulkModal.style.display = 'flex'; initBulkOptions(); refreshGrid(); });
 function initBulkOptions() { document.getElementById('bulkStatSelect').innerHTML = DM.getRules().stats.map(s => `<option value="${s}">${s.toUpperCase()}</option>`).join(''); }
 function refreshGrid() { UI.renderBulkGrid(dom.gridCont, (selectedIds) => { selectedEntityIds = selectedIds; dom.selCount.innerText = selectedIds.length; }, selectedEntityIds); }
