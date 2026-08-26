@@ -14,7 +14,8 @@ function processBuffDurations(actor, turn, addLogFunc) {
     }
 }
 
-function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = false) {
+function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = false, runtime = {}) {
+    const random = typeof runtime.random === 'function' ? runtime.random : Math.random;
     const initFighter = (ent, stats) => ({
         ...ent, currentStats: { ...stats }, currentHp: stats.hp || 100, traits: ent.traits || [], activeBuffs: [],
         tracker: { attacks: 0, crits: 0, hits: 0, misses: 0, damageDealt: 0, overkill: 0 }
@@ -81,7 +82,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
             return conditions.every(cond => {
                 const type = BattleSystem.normalizeString(cond.type);
                 switch (type) {
-                    case "chance": return Math.random() * 100 < cond.value;
+                    case "chance": return random() * 100 < cond.value;
                     case "hplessthen": 
                         const hpTarget = cond.target === "Self" ? owner : (owner === context.actor ? context.target : context.actor);
                         if (!hpTarget) return false;
@@ -170,7 +171,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
 
         hitChance = Math.max(5, Math.min(100, hitChance));
 
-        if (Math.random() * 100 > hitChance) {
+        if (random() * 100 > hitChance) {
             addLog(turn, attacker, defender, 'miss', 0, 'Missed!');
             attacker.tracker.misses++; 
             BattleSystem.processTriggers("OnMiss", attacker, context);
@@ -184,10 +185,10 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
         } catch (e) { rawDmg = 0; }
 
         const variance = attacker.variance || 0;
-        if (variance > 0) rawDmg *= (1 + (Math.random() * variance * 2 - variance));
+        if (variance > 0) rawDmg *= (1 + (random() * variance * 2 - variance));
 
         const criChance = aStats.cric !== undefined ? aStats.cric : (aStats.cri || 0);
-        if (Math.random() * 100 < criChance) {
+        if (random() * 100 < criChance) {
             context.isCrit = true;
             rawDmg *= (aStats.crid || 1.5);
             attacker.tracker.crits++;
@@ -222,7 +223,7 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
     const totalSpeed = aspdA + aspdB;
     const chanceA = totalSpeed > 0 ? (aspdA / totalSpeed) : 0.5;
     
-    const isPlayerFirst = Math.random() < chanceA;
+    const isPlayerFirst = random() < chanceA;
     let first = isPlayerFirst ? fighterA : fighterB;
     let second = isPlayerFirst ? fighterB : fighterA;
 
@@ -263,11 +264,11 @@ function simulateBattle(entA, statsA, entB, statsB, dmgFormula, recordLog = fals
     };
 }
 
-function runBattleBatch(entA, statsA, entB, statsB, count, dmgFormula) {
+function runBattleBatch(entA, statsA, entB, statsB, count, dmgFormula, runtime = {}) {
     let winsA = 0; let totalTurns = 0; let allLogs = []; const LOG_LIMIT = 100;
     for (let i = 0; i < count; i++) {
         const shouldRecord = (i < LOG_LIMIT);
-        const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, shouldRecord);
+        const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, shouldRecord, runtime);
         if (shouldRecord) allLogs.push(result.logs);
         if (result.winnerId === entA.id) winsA++;
         totalTurns += result.turns;
@@ -275,14 +276,14 @@ function runBattleBatch(entA, statsA, entB, statsB, count, dmgFormula) {
     return { opponentName: entB.name, winRate: (winsA / count) * 100, avgTurns: totalTurns / count, allLogs: allLogs };
 }
 
-function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula) {
+function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula, runtime = {}) {
     let winsA = 0; let totalTurns = 0; let winsWhenFirst = 0; let totalFirst = 0;
     let totalAttacksA = 0; let totalCritsA = 0; let totalDefensesA = 0; let totalDodgesA = 0;   
     let totalDamageA = 0; let totalOverkillA = 0;
     const turnDist = {}; const winHpDistA = []; const winHpDistB = []; 
 
     for (let i = 0; i < count; i++) {
-    const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, false);
+        const result = simulateBattle(entA, statsA, entB, statsB, dmgFormula, false, runtime);
         if (result.isPlayerFirst) { totalFirst++; if (result.winnerId === entA.id) winsWhenFirst++; }
         totalAttacksA += result.statsA.attacks; totalCritsA += result.statsA.crits;
         totalDamageA += result.statsA.damageDealt; totalDefensesA += result.statsB.attacks; totalDodgesA += result.statsB.misses;
@@ -300,7 +301,7 @@ function runMonteCarlo(entA, statsA, entB, statsB, count = 10000, dmgFormula) {
     };
 }
 
-function runPhaseAnalysis(battleEntA, battleEntB, allItems, rules, maxLevel) {
+function runPhaseAnalysis(battleEntA, battleEntB, allItems, rules, maxLevel, runtime = {}) {
     const phases = {
         Early: { min: 1, max: Math.floor(maxLevel * 0.33), wins: 0, total: 0 },
         Mid: { min: Math.floor(maxLevel * 0.33) + 1, max: Math.floor(maxLevel * 0.66), wins: 0, total: 0 },
@@ -318,7 +319,7 @@ function runPhaseAnalysis(battleEntA, battleEntB, allItems, rules, maxLevel) {
         const statsB = Sim.getStatsAtLevel(battleEntB, lv, allItems, rules);
 
         for (let i = 0; i < RUNS_PER_LEVEL; i++) {
-            const res = simulateBattle(battleEntA, statsA, battleEntB, statsB, rules, false);
+            const res = simulateBattle(battleEntA, statsA, battleEntB, statsB, rules, false, runtime);
             if (res.winnerId === battleEntA.id) phases[phaseName].wins++;
             phases[phaseName].total++;
         }

@@ -6,10 +6,17 @@
   "author": "Bawky <ghini7170@gmail.com>",
   "license": "ISC",
   "scripts": {
+    "build:renderer": "node scripts/build-renderer.js",
+    "prestart": "npm run build:renderer",
     "start": "electron .",
+    "test": "node --test",
+    "prebuild:win": "npm run build:renderer",
     "build:win": "electron-builder --win",
+    "prebuild:linux": "npm run build:renderer",
     "build:linux": "electron-builder --linux",
+    "prebuild:mac": "npm run build:renderer",
     "build:mac": "electron-builder --mac",
+    "prebuild:all": "npm run build:renderer",
     "build:all": "electron-builder --win --mac --linux"
   },
   "build": {
@@ -35,8 +42,16 @@
       "runAfterFinish": true
     },
     "files": [
-      "**/*",
-      "assets/**/*"
+      ".generated/renderer.js",
+      "assets/**/*",
+      "css/**/*",
+      "src/domain/projectDocument.js",
+      "src/main/**/*",
+      "src/shared/**/*",
+      "index.html",
+      "main.js",
+      "package.json",
+      "preload.js"
     ],
     "mac": {
       "target": [
@@ -57,10 +72,19 @@
     }
   },
   "devDependencies": {
-    "electron": "^39.2.7",
-    "electron-builder": "^26.0.12"
+    "chart.js": "^4.5.1",
+    "core-util-is": "^1.0.3",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "firebase": "^12.7.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.1"
   },
-  "dependencies": {
-    "firebase": "^12.7.0"
+  "overrides": {
+    "@grpc/grpc-js": "1.14.4",
+    "protobufjs": "7.6.5",
+    "websocket-driver": "0.7.5"
   }
 }

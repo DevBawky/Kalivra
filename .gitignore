@@ -5,6 +5,7 @@ node_modules/
 dist/
 out/
 build/
+.generated/
 
 .vscode/
 *.log

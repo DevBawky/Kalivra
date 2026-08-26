@@ -1,4 +1,5 @@
 const DM = require('./dataManager');
+const { escapeHtml, finiteNumber, safeColor } = require('./html');
 
 const TRAIT_OPTIONS = {
     triggers: [
@@ -80,11 +81,12 @@ function renderEntityCard(ent, index, container, callbacks) {
     rules.stats.forEach(s => {
         const d = ent.stats[s] || {b:0, g:0};
         const desc = rules.descriptions && rules.descriptions[s] ? rules.descriptions[s] : s.toUpperCase();
+        const safeStat = escapeHtml(s);
         statsHtml += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-            <span class="stat-label-text" title="${desc}" style="width:45px; font-size:0.85em; font-weight:bold; color:#b9bbbe;">${s.toUpperCase()}</span>
-            <input type="number" placeholder="Base" value="${d.b}" class="stat-input" data-stat="${s}" data-type="b" style="width:70px; padding:4px; text-align:left;" ${disabledAttr}>
-            <input type="number" placeholder="Grow" value="${d.g}" class="stat-input" data-stat="${s}" data-type="g" style="width:70px; padding:4px; text-align:left;" ${disabledAttr}>
-            <button class="solver-btn" data-ent-idx="${index}" data-stat="${s}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; padding:0 4px;" ${disabledAttr}>
+            <span class="stat-label-text" title="${escapeHtml(desc)}" style="width:45px; font-size:0.85em; font-weight:bold; color:#b9bbbe;">${escapeHtml(s.toUpperCase())}</span>
+            <input type="number" placeholder="Base" value="${finiteNumber(d.b)}" class="stat-input" data-stat="${safeStat}" data-type="b" style="width:70px; padding:4px; text-align:left;" ${disabledAttr}>
+            <input type="number" placeholder="Grow" value="${finiteNumber(d.g)}" class="stat-input" data-stat="${safeStat}" data-type="g" style="width:70px; padding:4px; text-align:left;" ${disabledAttr}>
+            <button class="solver-btn" data-ent-idx="${index}" data-stat="${safeStat}" title="Auto-calculate Growth" style="background:none; border:none; cursor:pointer; padding:0 4px;" ${disabledAttr}>
                 <img src="./assets/icon_target.png" style="width:18px; height:18px; vertical-align:middle;">
             </button>
         </div>`;
@@ -95,14 +97,14 @@ function renderEntityCard(ent, index, container, callbacks) {
             <div style="display:flex; gap:5px; align-items:center;">
                 <button class="lock-btn" style="background:none; border:none; cursor:pointer;">${lockIcon}</button>
                 <button class="type-btn" title="${typeTitle}" style="background:none; border:1px solid #444; border-radius:4px; cursor:pointer; padding:2px 4px;" ${disabledAttr}>${typeIcon}</button>
-                <input type="color" value="${ent.color}" data-key="color" class="prop-input" ${disabledAttr}>
-                <input type="text" value="${ent.name}" data-key="name" class="prop-input" style="font-weight:bold; width:90px;" ${disabledAttr}>
+                <input type="color" value="${safeColor(ent.color)}" data-key="color" class="prop-input" ${disabledAttr}>
+                <input type="text" value="${escapeHtml(ent.name)}" data-key="name" class="prop-input" style="font-weight:bold; width:90px;" ${disabledAttr}>
             </div>
             <button class="delete-btn" style="${isLocked ? 'display:none' : ''}">✕</button>
         </div>
         <div style="margin-bottom:5px; display:flex; gap:5px;">
             <label style="font-size:0.8em; color:#b9bbbe;">Dmg Var:</label>
-            <input type="number" value="${ent.variance||0}" step="0.05" data-key="variance" class="prop-input" style="width:60px; text-align:left;" ${disabledAttr}>
+            <input type="number" value="${finiteNumber(ent.variance)}" step="0.05" data-key="variance" class="prop-input" style="width:60px; text-align:left;" ${disabledAttr}>
         </div>
         <div class="entity-stats-container ${lockClass}">${statsHtml}</div>
     `;
@@ -139,19 +141,19 @@ function renderItemCard(item, index, container, callbacks) {
 
     let modHtml = '';
     item.modifiers.forEach((mod, midx) => {
-        let opts = ruleStats.map(s => `<option value="${s}" ${mod.stat===s?'selected':''}>${s.toUpperCase()}</option>`).join('');
+        let opts = ruleStats.map(s => `<option value="${escapeHtml(s)}" ${mod.stat===s?'selected':''}>${escapeHtml(s.toUpperCase())}</option>`).join('');
         modHtml += `
             <div class="item-stat-row" style="display:flex; gap:5px; margin-bottom:5px;">
                 <select class="mod-input" data-key="stat" data-idx="${midx}" style="width:85px;">${opts}</select>
                 <select class="mod-input" data-key="op" data-idx="${midx}" style="width:60px;"><option value="add" ${mod.op==='add'?'selected':''}>+</option><option value="mult" ${mod.op==='mult'?'selected':''}>×</option></select>
-                <input type="number" class="mod-input stat-input" data-key="val" data-idx="${midx}" value="${mod.val}" data-type="numberVal" style="width:75px; text-align:left; padding:4px;">
+                <input type="number" class="mod-input stat-input" data-key="val" data-idx="${midx}" value="${finiteNumber(mod.val)}" data-type="numberVal" style="width:75px; text-align:left; padding:4px;">
                 <button class="remove-stat-btn" data-idx="${midx}" style="padding:0 8px;">-</button>
             </div>`;
     });
 
     let targetHtml = '';
     DM.getEntities().forEach(ent => {
-        targetHtml += `<label class="target-checkbox" style="border-left:3px solid ${ent.color}"><input type="checkbox" class="target-select" data-ent-id="${ent.id}" ${item.targets.includes(ent.id)?'checked':''}><span>${ent.name}</span></label>`;
+        targetHtml += `<label class="target-checkbox" style="border-left:3px solid ${safeColor(ent.color)}"><input type="checkbox" class="target-select" data-ent-id="${finiteNumber(ent.id)}" ${item.targets.includes(ent.id)?'checked':''}><span>${escapeHtml(ent.name)}</span></label>`;
     });
 
     if (!item.traits) item.traits = [];
@@ -162,8 +164,8 @@ function renderItemCard(item, index, container, callbacks) {
         const condition = (trigger && trigger.conditions && trigger.conditions[0]) ? trigger.conditions[0] : { type: 'Always', value: 0 };
         const effect = (trigger && trigger.effects && trigger.effects[0]) ? trigger.effects[0] : { type: 'Heal', value: 0, target: 'Self' };
         
-        const createOpts = (list, selected) => list.map(o => `<option value="${o.val}" ${o.val===selected?'selected':''}>${o.text}</option>`).join('');
-        const createStatOpts = (selected) => ruleStats.map(s => `<option value="${s}" ${s===selected?'selected':''}>${s.toUpperCase()}</option>`).join('');
+        const createOpts = (list, selected) => list.map(o => `<option value="${escapeHtml(o.val)}" ${o.val===selected?'selected':''}>${escapeHtml(o.text)}</option>`).join('');
+        const createStatOpts = (selected) => ruleStats.map(s => `<option value="${escapeHtml(s)}" ${s===selected?'selected':''}>${escapeHtml(s.toUpperCase())}</option>`).join('');
         
         const showOp = effect.type === 'ModifyDamage' ? 'block' : 'none';
         const showValType = (effect.type === 'ModifyDamage' || effect.type === 'BuffStat') ? 'none' : 'block';
@@ -173,7 +175,7 @@ function renderItemCard(item, index, container, callbacks) {
         traitsHtml += `
             <div class="trait-row" style="background:#1e1e1e; padding:8px; border-radius:4px; margin-bottom:8px; border:1px solid #333;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; border-bottom:1px solid #333; padding-bottom:4px;">
-                    <input type="text" class="trait-name-input" data-idx="${tIdx}" value="${trait.name || 'Effect'}" style="width:150px; font-weight:bold; border:none; background:none; color:#ddd;" placeholder="Effect Name">
+                    <input type="text" class="trait-name-input" data-idx="${tIdx}" value="${escapeHtml(trait.name || 'Effect')}" style="width:150px; font-weight:bold; border:none; background:none; color:#ddd;" placeholder="Effect Name">
                     <button class="remove-trait-btn" data-idx="${tIdx}" style="color:#e74c3c; background:none; border:none; cursor:pointer;">✕</button>
                 </div>
                 <div style="display:flex; gap:8px; margin-bottom:6px; align-items:center;">
@@ -183,7 +185,7 @@ function renderItemCard(item, index, container, callbacks) {
                 <div style="display:flex; gap:8px; margin-bottom:6px; align-items:center;">
                     <span style="color:#d29922; font-size:0.85em; width:40px; text-align:right;">If</span>
                     <select class="trait-select" data-idx="${tIdx}" data-role="condType" style="flex:1; min-width:0;">${createOpts(TRAIT_OPTIONS.conditions, condition.type)}</select>
-                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="condVal" value="${condition.value}" style="width:70px; padding:4px; text-align:left;" placeholder="Val">
+                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="condVal" value="${finiteNumber(condition.value)}" style="width:70px; padding:4px; text-align:left;" placeholder="Val">
                 </div>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <span style="color:#2da44e; font-size:0.85em; width:40px; text-align:right;">Do</span>
@@ -191,9 +193,9 @@ function renderItemCard(item, index, container, callbacks) {
                     <select class="trait-select" data-idx="${tIdx}" data-role="effTarget" style="width:80px;">${createOpts(TRAIT_OPTIONS.targets, effect.target)}</select>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center; margin-top:6px; padding-left:48px;">
-                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="effVal" value="${effect.value}" style="width:70px; padding:4px; text-align:left;" placeholder="Val">
+                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="effVal" value="${finiteNumber(effect.value)}" style="width:70px; padding:4px; text-align:left;" placeholder="Val">
                     <select class="trait-select" data-idx="${tIdx}" data-role="effStat" style="flex:1; display:${showStat};">${createStatOpts(effect.stat || ruleStats[0])}</select>
-                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="effDuration" value="${effect.duration || 0}" style="width:80px; display:${showDuration}; border-color:#d29922; text-align:left;" placeholder="Duration">
+                    <input type="number" class="trait-input stat-input" data-idx="${tIdx}" data-role="effDuration" value="${finiteNumber(effect.duration)}" style="width:80px; display:${showDuration}; border-color:#d29922; text-align:left;" placeholder="Duration">
                     <select class="trait-select" data-idx="${tIdx}" data-role="effValType" style="flex:1; display:${showValType};">${createOpts(TRAIT_OPTIONS.valTypes, effect.valueType)}</select>
                     <select class="trait-select" data-idx="${tIdx}" data-role="effOp" style="flex:1; display:${showOp};">${createOpts(TRAIT_OPTIONS.ops, effect.op)}</select>
                 </div>
@@ -202,7 +204,7 @@ function renderItemCard(item, index, container, callbacks) {
 
     card.innerHTML = `
         <div class="item-header"><div style="display:flex; gap:8px;"><input type="checkbox" class="item-toggle" ${item.active?'checked':''}>
-        <input type="text" value="${item.name}" class="item-name" style="width:130px; font-weight:bold;"></div><button class="delete-item-btn">✕</button></div>
+        <input type="text" value="${escapeHtml(item.name)}" class="item-name" style="width:130px; font-weight:bold;"></div><button class="delete-item-btn">✕</button></div>
         <div class="item-stats-list">${modHtml}<button class="add-stat-btn" style="width:100%; margin-top:5px;">+ Add Stat Mod</button></div>
         <div class="item-traits-list" style="margin-top:12px; padding-top:8px; border-top:1px solid #3e3e42;"><label style="font-size:0.8em; color:#888; display:block; margin-bottom:8px;">Conditional Effects (Traits)</label>${traitsHtml}<button class="add-trait-btn" style="width:100%; background:#2f3136; border:1px dashed #555; margin-top:5px; cursor:pointer; color:#ccc; padding:6px;">+ Add Effect</button></div>
         <div class="item-targets"><span class="item-targets-label">Apply To:</span><div class="item-targets-list">${targetHtml}</div></div>`;
@@ -282,7 +284,7 @@ function renderBulkGrid(container, onSelectionChange, preSelectedIds = []) {
     const allSelected = entities.length > 0 && entities.every(e => preSelectedIds.includes(e.id));
     
     let html = `<table class="bulk-table"><thead><tr><th><input type="checkbox" id="selectAllBulk" ${allSelected ? 'checked' : ''}></th><th>Name</th>`;
-    stats.forEach(s => html += `<th>${s.toUpperCase()} (Base)</th>`);
+    stats.forEach(s => html += `<th>${escapeHtml(s.toUpperCase())} (Base)</th>`);
     html += `</tr></thead><tbody>`;
 
     entities.forEach(ent => {
@@ -290,11 +292,12 @@ function renderBulkGrid(container, onSelectionChange, preSelectedIds = []) {
         const checkedStr = isChecked ? 'checked' : '';
         const rowClass = isChecked ? 'selected' : '';
 
-        html += `<tr data-id="${ent.id}" class="${rowClass}">
-            <td><input type="checkbox" class="row-select" data-id="${ent.id}" ${checkedStr}></td>
-            <td>${ent.name}</td>`;
+        const entityId = finiteNumber(ent.id, 0);
+        html += `<tr data-id="${entityId}" class="${rowClass}">
+            <td><input type="checkbox" class="row-select" data-id="${entityId}" ${checkedStr}></td>
+            <td>${escapeHtml(ent.name)}</td>`;
         stats.forEach(s => {
-            const val = ent.stats[s]?.b || 0;
+            const val = finiteNumber(ent.stats[s]?.b, 0);
             html += `<td>${val}</td>`;
         });
         html += `</tr>`;

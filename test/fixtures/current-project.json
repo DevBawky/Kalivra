@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "projectName": "Fixture Project",
+    "author": "Test"
+  },
+  "snapshots": [],
+  "itemSets": [],
+  "current": {
+    "entities": [
+      {
+        "id": 1,
+        "name": "Unit",
+        "stats": {
+          "hp": { "b": 100, "g": 10 },
+          "atk": { "b": 20, "g": 2 }
+        }
+      }
+    ],
+    "items": [],
+    "gameRules": {
+      "stats": ["hp", "atk"],
+      "dmgFormula": "a.atk",
+      "hitFormula": "100",
+      "cpFormula": "hp + atk"
+    }
+  }
+}

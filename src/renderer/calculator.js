@@ -1,22 +1,13 @@
+const Formula = require('../domain/formulaEvaluator');
+
 function calculateValue(formula, statsSnapshot) {
-    try {
-        const keys = Object.keys(statsSnapshot);
-        const values = Object.values(statsSnapshot);
-        return new Function(...keys, `return ${formula};`)(...values);
-    } catch (e) { return 0; }
+    return Formula.evaluateFormula(formula, statsSnapshot);
 }
 
 function validateFormula(formula, statNames) {
     const dummyStats = {};
     statNames.forEach(s => dummyStats[s] = 1);
-    try {
-        const keys = Object.keys(dummyStats);
-        const values = Object.values(dummyStats);
-        new Function(...keys, `return ${formula};`)(...values);
-        return { valid: true };
-    } catch (e) {
-        return { valid: false, error: e.message };
-    }
+    return Formula.validateFormula(formula, { ...dummyStats, a: dummyStats, b: dummyStats });
 }
 
 function getStatsAtLevel(ent, lv, items, rules) {

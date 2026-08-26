@@ -7,21 +7,25 @@
 
 | 영역 | 파일 | 현재 책임 | 주요 결합/위험 |
 | --- | --- | --- | --- |
-| Electron 진입 | `main.js` | 창 생성, 앱 수명, IPC 등록 | renderer에 Node 전체 권한 제공, preload 없음 |
-| Main IPC | `src/main/ipcHandlers.js` | 창 제어, save/load/export 채널 | 문자열 채널 분산, payload 검증 없음, 등록 해제 없음 |
-| 파일 저장 | `src/main/fileManager.js` | 대화상자, 현재 경로, `.kal`/export I/O | module 전역 경로, 동기 I/O, 오류/취소 결과가 모호함 |
-| Renderer 조립 | `renderer.js` | 이벤트, modal, 명령, simulation, report/export, 화면 조정 | 1,100줄 이상, 전역 상태와 책임 집중, `innerHTML` 다수 |
-| 프로젝트 상태 | `src/renderer/dataManager.js` | 기본 데이터, mutable CRUD, snapshot/item set, 일부 명령, engine export | 내부 가변 객체 노출, renderer와 명령 스택 중복 |
-| 수치 계산 | `src/renderer/calculator.js` | 수식 평가/검증, 레벨 stat, crossover | `new Function`, 실패를 0으로 숨김 |
-| 전투 | `src/renderer/battle.js` | trait trigger, turn simulation, Monte Carlo/phase 분석 | `Math.random` 직접 사용, 규칙·로그·집계 혼합 |
+| Electron 진입 | `main.js`, `preload.js` | 보안 창 생성, 최소 renderer API, 앱 수명 | preload API 변경 시 IPC 계약과 동시 갱신 필요 |
+| Main IPC | `src/main/ipcHandlers.js`, `src/shared/ipcChannels.js` | 중앙 채널, sender/payload 검증, 창 제어 | 수동 payload validator를 schema 계층으로 확장할 여지 |
+| 파일 저장 | `src/main/fileManager.js` | 비동기 대화상자, `.kal`/export I/O, 원자적 저장 | 현재 경로가 adapter 인스턴스 단위이며 다중 창 정책은 미정 |
+| 프로젝트 문서 | `src/domain/projectDocument.js` | schema v1 검증, 현재/legacy 정규화, 직렬화 | entity/item 내부 값 검증은 아직 최소 수준 |
+| Renderer 조립 | `renderer.js` | 이벤트, modal, simulation, report/export, 화면 조정 | 여전히 1,000줄 이상이며 controller/report 추출 필요 |
+| 프로젝트 상태 | `src/renderer/dataManager.js` | 기본 데이터, mutable CRUD, snapshot/item set | 내부 가변 객체 노출과 DOM callback mutation이 남음 |
+| 명령 | `src/application/commandManager.js`, `editCommands.js` | 단일 Undo/Redo 이력, 범용 편집 명령 | 일부 DM/UI 결합 명령은 renderer에 남음 |
+| 수치 계산 | `src/domain/formulaEvaluator.js`, `src/renderer/calculator.js` | 제한된 수식 파싱/평가, 레벨 stat, crossover | simulation 표시 경로 일부가 계산 오류를 0으로 대체 |
+| 전투 | `src/renderer/battle.js` | trait trigger, turn simulation, Monte Carlo/phase 분석 | RNG는 주입 가능하지만 규칙·로그·집계 분리는 미완료 |
 | 역산 | `src/renderer/solver.js` | 목표 값에 맞는 growth 이분 탐색 | 계산기 구체 모듈 결합, 실패 원인 소실 |
 | UI 생성 | `src/renderer/uiManager.js` | entity/item/bulk DOM 생성과 이벤트 연결 | 상태 객체 직접 mutation, 동적 HTML과 callback 계약 혼합 |
 | 차트 | `src/renderer/chartManager.js` | Chart.js 인스턴스 생성/수명/resize | module singleton, 전역 `Chart` 의존 |
 | 외부 피드백 | `src/services/*` | Firebase 초기화와 feedback 저장 | renderer/window 직접 의존, 외부 실패 계약 약함 |
 
-`index.html`은 CDN 라이브러리와 단일 `renderer.js`를 로드한다. 소스는 CommonJS이며 현재
-자동화된 test/lint script가 없다. 13개 JavaScript 파일은 기준선에서 `node --check`를
-통과했다.
+`index.html`은 `script-src 'self'` CSP 아래 esbuild가 만든 `.generated/renderer.js`만 로드한다.
+Chart.js, JSZip, jsPDF, html2canvas, Firebase SDK도 빌드 시 renderer bundle에 포함한다.
+renderer는 `nodeIntegration: false`, `contextIsolation: true`, sandbox 모드에서 실행된다.
+Node 내장 test runner 기반 테스트와 fixture가 있으며 `npm test`, `npm run build:renderer`,
+플랫폼별 package script를 사용한다.
 
 ## 현재 데이터 계약
 
@@ -29,6 +33,7 @@
 
 ```text
 project
+├─ schemaVersion: 1
 ├─ meta
 ├─ snapshots[]
 ├─ itemSets[]
@@ -38,8 +43,8 @@ project
    └─ gameRules
 ```
 
-`dataManager.loadProject`는 과거 형태인 `{ entities, items, gameRules }`도 받는다. 이 legacy
-경로는 명시적 migration으로 대체할 때까지 호환 계약으로 취급한다. Entity의 stat은
+`projectDocument`는 과거 형태인 `{ entities, items, gameRules? }`도 기본 규칙을 사용해
+현재 형태로 migration한다. 알 수 없는 향후 schemaVersion은 거부한다. Entity의 stat은
 `{ b, g }`, item은 `targets`, `modifiers`, `traits`를 포함하며 Unity/Unreal export가 이
 필드와 ID 관계에 의존한다.
 
@@ -79,28 +84,28 @@ JavaScript에서는 작은 객체 계약이나 함수 인자로 충분하며 cla
 각 단계는 독립적으로 검증·되돌릴 수 있어야 한다. 큰 기능 요청이 없다면 앞 단계의 안전망을
 건너뛰어 뒤 구조를 한꺼번에 만들지 않는다.
 
-### 1. 안전망과 계약 고정
+### 1. 안전망과 계약 고정 — 완료
 
 - Node 내장 test runner 등 최소 테스트 기반과 fixture 위치를 정한다.
 - 현재/legacy/손상 `.kal` fixture, 대표 계산/전투 fixture를 추가한다.
 - 수식, 시간, ID, RNG 호출을 감쌀 seam을 추가하되 결과는 바꾸지 않는다.
 - 성공 기준: 기존 계산과 round trip, Undo/Redo를 자동 재현할 수 있다.
 
-### 2. 순수 도메인 분리
+### 2. 순수 도메인 분리 — 진행 중
 
 - 프로젝트 기본값/검증/정규화, stat 성장과 modifier, formula engine을 UI에서 분리한다.
 - 전투를 turn 규칙, trigger/effect, 로그 수집, batch 통계로 나누고 RNG를 주입한다.
 - solver는 `FormulaEvaluator`와 stat 계산 계약에만 의존하게 한다.
 - 성공 기준: Electron이나 DOM 없이 도메인 테스트가 실행된다.
 
-### 3. 상태와 명령 경계 통합
+### 3. 상태와 명령 경계 통합 — 진행 중
 
 - 프로젝트 상태를 캡슐화하고 mutation을 이름 있는 유스케이스로 제한한다.
 - `dataManager.js`와 `renderer.js`의 두 Undo/Redo 구현을 하나로 통합한다.
 - snapshot/item set/load가 명령 이력과 modified 상태에 미치는 규칙을 명시한다.
 - 성공 기준: 모든 편집 경로에 execute/undo/redo 불변조건 테스트가 있다.
 
-### 4. 저장소와 IPC 안정화
+### 4. 저장소와 IPC 안정화 — 완료
 
 - 문서 parser/validator/migrator와 파일 adapter를 분리한다.
 - 구조화된 `{ status: 'ok' | 'cancelled' | 'error', ... }` 결과와 IPC schema를 둔다.
@@ -108,7 +113,7 @@ JavaScript에서는 작은 객체 계약이나 함수 인자로 충분하며 cla
 - preload 최소 API로 호출부를 옮긴 뒤 Node integration을 끈다.
 - 성공 기준: renderer가 `electron`, `fs`, Firebase SDK를 직접 require하지 않는다.
 
-### 5. Renderer 분해
+### 5. Renderer 분해 — 다음 우선순위
 
 - `renderer.js`를 bootstrap, controller/presenter, modal/report/export 유스케이스로 분리한다.
 - DOM 생성과 상태 변경을 분리하고 동적 텍스트의 `innerHTML` 사용을 제거한다.

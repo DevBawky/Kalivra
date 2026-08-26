@@ -142,14 +142,23 @@ npm start
 
 ### Build Executable (For Distribution)
 ```bash
-npm run build
+npm run build:win
 ```
+
+Run automated tests with `npm test`. Other packaging targets are available as
+`build:linux`, `build:mac`, and `build:all`.
 
 ## Project Structure
 - `main.js`
-Electron main process, window lifecycle, file I/O
+Electron main process and window lifecycle
+- `preload.js`, `src/main/`
+Minimal IPC API and filesystem adapters
 - `renderer.js`
-Simulation logic, UI state, analysis pipeline
+Renderer composition, UI events, and analysis pipeline
+- `src/domain/`, `src/application/`
+Project document, formula, and Undo/Redo command boundaries
+- `test/`
+Node test runner regressions and project fixtures
 - `index.html`
 Application UI layout
 - `assets/`
@@ -298,14 +307,23 @@ npm start
 
 ### 실행 파일 빌드
 ```bash
-npm run build
+npm run build:win
 ```
+
+자동 테스트는 `npm test`로 실행합니다. 다른 플랫폼은 `build:linux`, `build:mac`,
+`build:all` 스크립트를 사용합니다.
 
 ## 프로젝트 구조
 - `main.js`
-Electron 메인 프로세스, 윈도우 생명주기, 파일 입출력
+Electron 메인 프로세스와 윈도우 생명주기
+- `preload.js`, `src/main/`
+최소 IPC API와 파일 시스템 어댑터
 - `renderer.js`
-시뮬레이션 로직, UI 상태, 분석 파이프라인
+renderer 조립, UI 이벤트, 분석 파이프라인
+- `src/domain/`, `src/application/`
+프로젝트 문서·수식과 Undo/Redo 명령 경계
+- `test/`
+Node 내장 test runner 기반 회귀 테스트와 프로젝트 fixture
 - `index.html`
 애플리케이션 UI 레이아웃
 - `assets/`

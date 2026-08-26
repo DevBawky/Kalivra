@@ -1,3 +1,5 @@
+const ProjectDocument = require('../domain/projectDocument');
+
 let projectData = {
     meta: {
         projectName: "Kalivra Alpha Project",
@@ -97,20 +99,7 @@ let projectData = {
     }
 };
 
-class CommandManager {
-    constructor() { this.undoStack = []; this.redoStack = []; }
-    execute(command) { command.execute(); this.undoStack.push(command); this.redoStack = []; }
-    undo() { const cmd = this.undoStack.pop(); if (cmd) { cmd.undo(); this.redoStack.push(cmd); return true; } return false; }
-    redo() { const cmd = this.redoStack.pop(); if (cmd) { cmd.execute(); this.undoStack.push(cmd); return true; } return false; }
-}
-
-class DeleteItemCommand {
-    constructor(listArray, index, uiCallback) { this.listArray = listArray; this.index = index; this.uiCallback = uiCallback; this.deletedItem = null; }
-    execute() { if (this.index >= 0 && this.index < this.listArray.length) { this.deletedItem = this.listArray.splice(this.index, 1)[0]; if (this.uiCallback) this.uiCallback(); } }
-    undo() { if (this.deletedItem) { this.listArray.splice(this.index, 0, this.deletedItem); if (this.uiCallback) this.uiCallback(); } }
-}
-
-const commandManager = new CommandManager();
+projectData = ProjectDocument.normalizeProjectDocument(projectData);
 
 const DM = {
     getEntities: () => projectData.current.entities,
@@ -120,11 +109,12 @@ const DM = {
     setMeta: (newMeta) => { projectData.meta = { ...projectData.meta, ...newMeta }; },
     getSnapshots: () => projectData.snapshots,
     
-    createSnapshot: (name) => {
+    createSnapshot: (name, { clock = Date.now } = {}) => {
+        const timestamp = clock();
         const snapshot = {
-            id: Date.now(),
+            id: timestamp,
             name: name || `Snapshot ${projectData.snapshots.length + 1}`,
-            date: new Date().toISOString(),
+            date: new Date(timestamp).toISOString(),
             data: JSON.parse(JSON.stringify(projectData.current)) 
         };
         projectData.snapshots.push(snapshot);
@@ -133,8 +123,6 @@ const DM = {
     loadSnapshot: (index) => {
         if (index >= 0 && index < projectData.snapshots.length) {
             projectData.current = JSON.parse(JSON.stringify(projectData.snapshots[index].data));
-            commandManager.undoStack = [];
-            commandManager.redoStack = [];
         }
     },
 
@@ -142,10 +130,10 @@ const DM = {
 
     getItemSets: () => projectData.itemSets || [],
     
-    addItemSet: (name) => {
+    addItemSet: (name, { clock = Date.now } = {}) => {
         if (!projectData.itemSets) projectData.itemSets = [];
         const newSet = {
-            id: Date.now(),
+            id: clock(),
             name: name || `Set ${projectData.itemSets.length + 1}`,
             items: JSON.parse(JSON.stringify(projectData.current.items)) 
         };
@@ -159,16 +147,8 @@ const DM = {
     },
 
     loadProject: (data) => {
-        if (data.meta && data.current) {
-            projectData = data;
-            if (!projectData.itemSets) projectData.itemSets = [];
-        } else {
-            projectData.current.entities = data.entities || [];
-            projectData.current.items = data.items || [];
-            projectData.current.gameRules = data.gameRules || projectData.current.gameRules;
-            projectData.snapshots = [];
-            projectData.itemSets = [];
-        }
+        projectData = ProjectDocument.normalizeProjectDocument(data, projectData);
+        return projectData;
     },
 
     hasProjectData: () => {
@@ -184,14 +164,6 @@ const DM = {
     addEntity: (ent) => projectData.current.entities.push(ent),
     removeEntity: (idx) => projectData.current.entities.splice(idx, 1),
     addItem: (item) => projectData.current.items.push(item),
-    removeItemWithUndo: (idx, uiRefreshFunc) => {
-        const cmd = new DeleteItemCommand(projectData.current.items, idx, uiRefreshFunc);
-        commandManager.execute(cmd);
-    },
-
-    undo: () => commandManager.undo(),
-    redo: () => commandManager.redo(),
-
     bulkUpdate: (entityIds, stat, op, value) => {
         projectData.current.entities.forEach(ent => {
             if (entityIds.includes(ent.id)) {

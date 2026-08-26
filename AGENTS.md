@@ -49,8 +49,9 @@ SOLID는 판단 기준이지 패턴 적용 할당량이 아니다. 새 추상화
 
 - `renderer.js`에 새 기능 로직을 계속 쌓지 않는다. 이벤트 연결과 화면 조정만 남기고,
   도메인 계산·상태 변경·내보내기 생성은 응집된 모듈로 추출한다.
-- 프로젝트 상태의 소유자는 하나여야 한다. 현재 `dataManager.js`와 `renderer.js`에 나뉜
-  명령/Undo 스택을 늘리지 말고, 점진적으로 하나의 명령 실행 경계로 통합한다.
+- 프로젝트 상태와 명령 이력의 소유자는 각각 하나여야 한다. 현재 명령 이력은
+  `src/application/commandManager.js`의 한 인스턴스로 통합되어 있다. 새 Undo/Redo 스택을
+  만들지 말고, 남은 구체 편집 명령을 애플리케이션 경계로 점진적으로 이동한다.
 - 외부에 반환한 가변 배열·객체를 임의로 수정하는 새 코드를 만들지 않는다. 변경은
   이름 있는 명령/유스케이스를 통하고, 저장·Undo에 필요한 snapshot 정책을 명시한다.
 - 전투 난수와 ID/시간 생성은 주입 가능한 함수로 감싸 결정적 테스트가 가능해야 한다.
@@ -79,13 +80,15 @@ SOLID는 판단 기준이지 패턴 적용 할당량이 아니다. 새 추상화
 - public 모듈 계약과 저장 형식을 바꿀 때는 모든 호출자, fixture, 문서를 같은 변경에서 갱신한다.
 - 새 production 의존성은 기존 플랫폼이나 작은 로컬 모듈로 해결할 수 없는 이유와
   번들 크기·보안·유지보수 영향을 먼저 설명한다.
-- 존재하지 않는 명령이 성공했다고 보고하지 않는다. 현재 `package.json`에는 자동화된
-  test/lint 스크립트가 없으므로, 추가 전에는 변경한 JS에 `node --check`를 실행하고
-  관련 수동 검증 범위와 미검증 항목을 명시한다.
+- 존재하지 않는 명령이 성공했다고 보고하지 않는다. `npm test`로 자동 테스트를 실행하고,
+  변경한 JavaScript는 `node --check` 또는 renderer build로 파싱을 검증한다. 관련 수동
+  검증 범위와 미검증 항목도 명시한다.
 
 ## 현재 명령
 
 - 의존성 설치: `npm install` 또는 lockfile을 보존하는 CI 설치 시 `npm ci`
+- 자동 테스트: `npm test`
+- renderer 번들: `npm run build:renderer`
 - 개발 실행: `npm start`
 - 패키징: `npm run build:win`, `npm run build:linux`, `npm run build:mac`, `npm run build:all`
 - JavaScript 파싱 확인: `node --check <changed-file.js>`
@@ -105,4 +108,3 @@ SOLID는 판단 기준이지 패턴 적용 할당량이 아니다. 새 추상화
 - catch가 데이터 손실·계산 실패를 숨기거나 성공처럼 처리함
 - 도메인 모듈이 DOM, Electron, Chart.js, Firebase 같은 구체 인프라에 의존함
 - 추출 명목으로 책임이 불명확한 manager/helper/service 또는 순환 의존성을 추가함
-

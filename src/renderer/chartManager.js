@@ -1,3 +1,5 @@
+const Chart = require('chart.js/auto');
+
 let mainChart = null;
 let battleChart = null;
 let detailTurnChart = null;
